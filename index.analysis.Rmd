@@ -1,0 +1,55 @@
+---
+title: "index.analysis"
+author: "Simon Topp"
+date: "5/30/2018"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+
+```
+
+```{r}
+index <- read.csv('wqIndex.csv')
+
+in.filt <- index %>%
+  select(Paper.ID, Author, Journal, Year, Location, Lat, Long, Scale = Study.Scale..sq.km., Time = Timescale..in.years., Approach = Chosen.Model.Approach, Category, Rating = Category.Rating..1.10.) %>%
+  unique() %>%
+  na.omit() %>%
+  mutate(Catv2 = if_else(Rating < 5, 'Methods', ifelse(Rating > 7 | Rating < 5, 'Causal', 'Trends')),
+         Decade = trunc(Year/10) * 10,
+         Time.Bin = cut(Time, breaks = c(-Inf, 1/376, 7/365, 1/12, 1/2, 1, 5, 10, Inf), labels = c('Day', 'Week', 'Month', '6 Months', 'Year', '5 Years', '10 Years', '>10 Years')))
+
+ggplot(in.filt, aes(x = Decade, fill = Catv2)) + geom_bar() + labs(fill = 'Category')
+
+ggplot(in.filt, aes(x = Decade, fill = as.factor(Scale))) + geom_bar() + labs(title = "Order of magnitude study scale (sq. km)", fill = 'Scale')
+
+ggplot(in.filt, aes(x = Decade, fill = Time.Bin)) + geom_bar() + labs(title = "Study Period Length by Decade)", fill = 'Length')
+
+
+ggplot(in.filt, aes(x = Scale))
+
+in.filt$Scale[in.filt$Scale == 6] = 4
+
+```
+
+
+
+##Scopus Scrape
+```{r}
+
+scrape <- read.csv('scopusLakes.csv') %>%
+  bind_rows(read.csv('scopusRivers.csv'))%>%
+  bind_rows(read.csv('scopusInlandWaters.csv'))%>%
+  unique()
+
+ggplot(scrape, aes(x = Year)) + geom_bar() + labs(title = 'Historic Publications Count')
+
+
+```
+

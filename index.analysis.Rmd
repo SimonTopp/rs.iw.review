@@ -11,21 +11,257 @@ editor_options:
 knitr::opts_chunk$set(echo = TRUE)
 
 library(tidyverse)
+library(googledrive)
 
 ```
 
+
+# Download google doc, rename, and create new munged file
+
+Running Questions for Matt
+1) Go over Journal List and make sure there's no dumb mistakes in there.
+2) Lat/long for 'various' entries.
+3) Image.Composite, kinda a wonky one, not sure if I've been consistent, can I still use it
+4) 0 for study scale that's undefined (i.e. 'unknown')
+5) All reservoirs are going to be called lakes or lakes/reservoirs
+6) Best AC-maybe keep to ourselves because it's messy?  Change to yes/no.
+7) Bands some inconsistencies when it comes to ratios vs indices vs wavelengths, labels, etc, keep?
+8) Constituent transform, remove?
+      1/SD        1/n       Log      Many See Notes       TSI       log        na      none     power      sqrt   unknown 
+         1         1         6         2         2         3        97        41       188         1         2         5 
+9) GO THROUGH ALL COLUMNS AND DECIDE WHAT TO KEEP! THESE ONES ARE MESSy:
+  -Image.Composite, Best.AC, Constituent Transform, Bands, Classification(just not really used), 
+
 ```{r}
-index <- read.csv('wqIndex.csv')
+## Munging
 
-in.filt <- index %>%
-  select(Paper.ID, Author, Journal, Year, Location, Lat, Long, Scale = Study.Scale..sq.km., Time = Timescale..in.years., Approach = Chosen.Model.Approach, Category, Rating = Category.Rating..1.10.) %>%
-  unique() %>%
-  na.omit() %>%
-  mutate(Catv2 = if_else(Rating < 5, 'Methods', ifelse(Rating > 7 | Rating < 5, 'Causal', 'Trends')),
-         Decade = trunc(Year/10) * 10,
-         Time.Bin = cut(Time, breaks = c(-Inf, 1/376, 7/365, 1/12, 1/2, 1, 5, 10, Inf), labels = c('Day', 'Week', 'Month', '6 Months', 'Year', '5 Years', '10 Years', '>10 Years')))
+## Download latest version
+drive_download(as_id('https://docs.google.com/spreadsheets/d/1fHsqm74c2sp2LyZjredmHMLvS08nlfHZTxf49eNon4Y/edit?usp=sharing'), path = 'wqIndex.csv', overwrite = T)
 
-ggplot(in.filt, aes(x = Decade, fill = Catv2)) + geom_bar() + labs(fill = 'Category')
+##Rename all the columns
+index <- read.csv('wqIndex.csv') %>% rename(Coverage.KM = Study.Scale..sq.km., Years = Timescale..in.years., Sensor = Sensor.s., Atm.Comp = Atm..Comparison, Best.AC = Best.A..Correction, Constituent = Parameter, Bands = Bands.Band.Ratios, Landscape.var = Landscape.Variables.in.final.model, Num.Models = Number.of.models.used, Model.Comparison = Modelling.Approach.Comparison, Model = Chosen.Model.Approach, Classification = Waterbody.Classification, EF = Error..fit., EF.metric = Error.metric..fit., EV = Error..validation., EV.metric = Error.Metric..validation., Figs.m = Methodology.Figs.Tables, Figs.v = Validation.Figs.Tables, Figs.t = Theory.Trend.Figs.Tables, Cat = Category, Rating = Category.Rating..1.10.)
+  
+##Change this later, for now keep originally listed params
+index.munge <- index %>% 
+  mutate(Catv2 = if_else(Rating < 5, 'Methods', ifelse(Rating > 7, 'Causal','Trends')),
+         Year.Bin = past0(trunc(Year/5) * 5,'-', trunc(Year/5) * 5 + 5),
+         Time.Bin= cut(as.numeric(Years), breaks = c(-Inf, 1/365, 1/12, 1, 5, 10, Inf),
+                        labels = c('< Day', '< 1 Month', '< 1 Year', '1-5 Years', '5-10 Years', 
+                                   '>10 Years'))) %>%
+        filter(Parameter != '')
+
+
+
+#### Filtered List
+index.filt <- index.munge2 %>%
+  select(-c(Constituent, Landscape.var, Num.Models, Model.Comparison, Bands, Best.AC, Classification,EF,EF.metric,EV,EV.metric,Notes,Parameter, Constituent.Transform, Atm.Comp, Sensor, Sensor.Type)) %>%
+  distinct(Paper.ID, .keep_all = T)
+
+
+#### Check notes: Go back and look at it
+check <- index.filt %>% group_by(Paper.ID) %>% summarise(count = n())
+
+
+```
+
+# Clean the Study Parameters
+
+```{r}
+### Look at the unique values in order
+unique(index$Parameter)[order(unique(index$Parameter))]
+
+##Amalgamate as necessary
+terms <- list(
+Sediments.Other = c('^OSS|^VSS|^NVSS|^TDS|^NPSS$|tripton|Tripton|^ISS'),
+Cyanobacteria = c('^BG|^phycocyanin|^cy$|^CY$|^PC$|cyanobacteria'),
+Chl = c('CHL|chl-a|Chl-a|Chl-b|Chl-c|Green algae|Green Biovolume|Algal Blooms|Algae'),
+Carbon.Other = c('^TOC|^COD|^BOD|^DIC|^NPOC|^pCO2|^TIC'),
+Chromaticity = c('chromaticity|Color'),
+Trophic = c('^TSI'),
+Clarity = c('SDD|^SD|Secchi|Kd\\(PAR\\)'),
+Turbidity = c('turb|Turb|Turbidity|TURB'),
+Nutrients = c('^TN|NH3-N|NO3-N|^TP|^DP'),
+Metals = c('^Pb|^As|^Zn|Total heavy metals'),
+Other = c('^pH|Diatom|water type|class|^DO$|Conductivity|Depth|^CYS$'),
+TSS = c('^DW$|^SDW|^SPM|^SS$|^SSC|^SM$|^TSM|^Seston$')
+)
+  
+##Replace terms
+for (i in 1:length(terms)) {
+index.munge <- index.munge %>% mutate(Parameter = ifelse(grepl(pattern = terms[[i]], Parameter), names(terms[i]), as.character(Parameter)))
+}
+  
+##Check the work
+unique(index.munge$Parameter)[order(unique(index.munge$Parameter))]
+
+
+##Munge 2 Experiment:  More general categories
+##Amalgamate as necessary
+terms <- list(
+Suspended.Sediment = c('^Sediments.Other$|^TSS$'),
+Algae = c('^Chl$|^Cyanobacteria$'),
+Carbon = c('^Carbon.Other$|^CDOM$|^DOC$'),
+Clarity = c('^Clarity$'),
+Turbidity = c('^turb|Turb|Turbidity|TURB$'),
+Nutrients = c('^Nutrients$|^Metals$'),
+Other = c('^Other$|Chromaticity|Trophic')
+)
+
+##Replace terms
+index.munge2 <- index.munge %>%
+  mutate(Year.Bin = paste0(index.munge$Year.Bin, '-', index.munge$Year.Bin + 5))
+for (i in 1:length(terms)) {
+index.munge2 <- index.munge2 %>% mutate(Parameter = ifelse(grepl(pattern = terms[[i]], Parameter), names(terms[i]), Parameter))
+}
+###Check work
+unique(index.munge2$Parameter)[order(unique(index.munge2$Parameter))]
+
+```
+
+# Clean the Modelling Approaches 
+
+```{r}
+######################## Modelling Approach Cleaning
+
+
+### Look at the unique values in order
+unique(index.munge$Model)[order(unique(index.munge$Model))]
+
+##Amalgamate as necessary
+terms <- list(
+Semi.Analytical = c('^Analytic$|^Analytical$|^Semi-Analytic$|^Semi-analytical|^semi-analytical|^Semi.Analytic|^chromaticity$|^analytical$'),
+Empirical = c('^empirical$|^Emprical$|emprical|^semi-empirical$|Normalized Difference|^empirical$|OC2'),
+Machine.Learning = c('ANN - NARXNET|^ANN$|^EOF$|^RF$|^GP$|^GA-BP-NN$|^Symbolic regression|LUT\\(ML\\)|^HCA$'),
+Mixed = c('^mixed$|^Empirical, Semi-analytic$')  ### Remove this later if necessary
+)
+  
+    
+##Replace terms
+for (i in 1:length(terms)) {
+index.munge <- index.munge %>% mutate(Model = ifelse(grepl(pattern = terms[[i]], Model), names(terms[i]), as.character(Model)))
+}
+  
+##Check the work
+unique(index.munge$Model)[order(unique(index.munge$Model))]
+```
+
+#Clean the study scale (Likely won't need this one utlimately, but for now there are 'unknowns' in the dataset that cause it to import as a factor).  This just changes unknown to 0 which is a judgement call in itself.
+
+```{r}
+####################### Scale cleaning
+### Look at the unique values in order
+unique(index.munge$Coverage.KM)[order(unique(index.munge$Coverage.KM))]
+  
+##Amalgamate as necessary
+terms <- 'unknown'
+
+index.munge <- index.munge %>% mutate(Coverage.KM = ifelse(grepl(pattern = terms, Coverage.KM), 0, as.integer(Coverage.KM)-1))
+  
+##Check the work
+unique(index.munge$Coverage.KM)[order(unique(index.munge$Coverage.KM))]
+  
+```
+
+#Clean the Journals (Not sure about this one, but go over with Matt to look for obvious errors.)
+
+```{r}
+######################## Journal Cleaning
+
+
+### Look at the unique values in order
+unique(index.munge$Journal)[order(unique(index.munge$Journal))]
+
+##Amalgamate as necessary
+terms <- list(
+)
+  
+    
+##Replace terms
+for (i in 1:length(terms)) {
+index.munge <- index.munge %>% mutate(Journal = ifelse(grepl(pattern = terms[[i]], Journal), names(terms[i]), as.character(Journal)))
+}
+  
+##Check the work
+unique(index.munge$Journal)[order(unique(index.munge$Journal))]
+```
+
+
+# Make some Figures!
+
+```{r}
+#### Create Filtered List with  entry per paper for certain figures
+index.filt <- index.munge2 %>%
+  select(-c(Constituent, Landscape.var, Num.Models, Model.Comparison, Bands, Best.AC, Classification,EF,EF.metric,EV,EV.metric,Notes,Parameter, Constituent.Transform, Atm.Comp, Sensor, Sensor.Type)) %>%
+  distinct(Paper.ID, .keep_all = T)
+
+
+#### Check notes: Go back and look at it
+check <- index.filt %>% group_by(Paper.ID) %>% summarise(count = n())
+
+
+####Figs
+
+ggplot(index.munge, aes(fct_infreq(Parameter), fill = Model)) + 
+  geom_bar() + 
+  theme_bw() + 
+  labs(x = 'Parameter', y = 'Count') + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+
+
+ggplot(index.munge2, aes(fct_infreq(Parameter), fill = Model)) + 
+  geom_bar() + 
+  theme_bw() + 
+  labs(x = 'Parameter', y = 'Count') + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+##Timeline
+ggplot(index.munge2, aes(x = Year.Bin, fill = Parameter)) + 
+  geom_bar() + 
+  theme_bw() + 
+  labs(x = 'Years', y = 'Count') + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+ggplot(index.filt, aes(x = Year.Bin, fill = Model)) + 
+  geom_bar() + 
+  theme_bw() + 
+  labs(x = 'Years', y = 'Count') + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+ggplot(index.filt, aes(x = Year.Bin, fill = as.factor(Coverage.KM))) + 
+  geom_bar() + 
+  theme_bw() + 
+  labs(x = 'Years', y = 'Count', fill = 'Coverage Mangitude \n 10km ^ i') + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+ggplot(index.filt, aes(x = Year.Bin, fill = Time.Bin)) + 
+  geom_bar() + 
+  theme_bw() + 
+  labs(x = 'Years', y = 'Count', fill = 'Timespan') + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+###
+
+ggplot(index.filt, aes(x = Time.Bin, fill = as.factor(Coverage.KM))) + 
+  geom_bar() + 
+  theme_bw() + 
+  labs(x = 'Time Span', y = 'Count', fill = 'Coverage Mangitude \n 10km ^ i') + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+
+ggplot(index.filt, aes(x = Year.Bin, fill = Time.Bin)) + 
+  geom_bar() + 
+  theme_bw() + 
+  labs(x = 'Time Span', y = 'Count') + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+ggplot(index.filt, aes(x = Time.Bin, fill = as.factor(Coverage.KM))) + geom_bar()
+
+
+
+ggplot(index %>% filter(Constituent > 1), aes(x = Constituent)) + geom_bar()
+
+ggplot(index.munge %>% distinct(Paper.ID, keep_all = T), aes(x = Year.Bin, fill = Catv2)) + geom_bar() + labs(fill = 'Category')
 
 ggplot(in.filt, aes(x = Decade, fill = as.factor(Scale))) + geom_bar() + labs(title = "Order of magnitude study scale (sq. km)", fill = 'Scale')
 
@@ -39,7 +275,6 @@ in.filt$Scale[in.filt$Scale == 6] = 4
 ```
 
 
-
 ##Scopus Scrape
 ```{r}
 
@@ -51,5 +286,113 @@ scrape <- read.csv('scopusLakes.csv') %>%
 ggplot(scrape, aes(x = Year)) + geom_bar() + labs(title = 'Historic Publications Count')
 
 
+unique(in.filt$Approach)
+
+ml <- in.filt %>% filter(Approach != c(Empirical, semi-analytical, na, Semi-anlytical, Analytic, Analytical, mixed))
+
+
+ml <- in.filt %>% filter(Approach == c('EOF','ANN - NARXNET','ANN', 'GA-BP-NN','GP','Symbolic regression'))
+
+con.count <- index %>% group_by(Constituent) %>% summarise(count = n()) %>% filter(count > 1)
+
+unique(index$Constituent)[order(unique(index$Constituent))]
+
+
+```
+
+
+
+
+## Temp
+
+```{r}
+
+### Paramter cleaning
+
+### Look at the unique values in order
+unique(index$Constituent)[order(unique(index$Constituent))]
+
+##Amalgamate as necessary
+terms <- list(
+Sediments.Other = c('^OSS|^VSS|^NVSS|^TDS|^NPSS$|tripton|Tripton|^ISS'),
+Cyanobacteria = c('^BG|^phycocyanin|^cy$|^CY$|^PC$|cyanobacteria'),
+Chl = c('CHL|chl-a|Chl-a|Chl-b|Chl-c|Green algae|Green Biovolume|Algal Blooms|Algae'),
+Carbon.Other = c('^TOC|^COD|^BOD|^DIC|^NPOC|^pCO2|^TIC'),
+Chromaticity = c('chromaticity|Color'),
+Trophic = c('^TSI'),
+Clarity = c('SDD|^SD|Secchi|Kd\\(PAR\\)'),
+Turbidity = c('turb|Turb|Turbidity|TURB'),
+Nutrients = c('^TN|NH3-N|NO3-N|^TP|^DP'),
+Metals = c('^Pb|^As|^Zn|Total heavy metals'),
+Other = c('^pH|Diatom|water type|class|^DO$|Conductivity|Depth|^CYS$'),
+TSS = c('^DW$|^SDW|^SPM|^SS$|^SSC|^SM$|^TSM|^Seston$')
+)
+  
+  
+##Replace terms
+for (i in 1:length(terms)) {
+index.munge <- index.munge %>% mutate(Parameter = ifelse(grepl(pattern = terms[[i]], Parameter), names(terms[i]), as.character(Parameter)))
+}
+
+##Check the work
+unique(index.munge$Parameter)[order(unique(index.munge$Parameter))]
+
+  
+###
+######################## Modelling Approach Cleaning
+### Look at the unique values in order
+unique(index.munge$Model)[order(unique(index.munge$Model))]
+
+##Amalgamate as necessary
+terms <- list(
+Semi.Analytical = c('^Analytic$|^Analytical$|^Semi-Analytic$|^Semi-analytical|^semi-analytical|^Semi.Analytic|^chromaticity$|^analytical$'),
+Empirical = c('^empirical$|^Emprical$|emprical|^semi-empirical$|Normalized Difference|^empirical$|OC2'),
+Machine.Learning = c('ANN - NARXNET|^ANN$|^EOF$|^RF$|^GP$|^GA-BP-NN$|^Symbolic regression|LUT\\(ML\\)|^HCA$'),
+Mixed = c('^mixed$|^Empirical, Semi-analytic$')  ### Remove this later if necessary
+)
+  
+    
+##Replace terms
+for (i in 1:length(terms)) {
+index.munge <- index.munge %>% mutate(Model = ifelse(grepl(pattern = terms[[i]], Model), names(terms[i]), as.character(Model)))
+}
+  
+##Check the work
+unique(index.munge$Model)[order(unique(index.munge$Model))]
+  
+ 
+###
+####################### Scale cleaning
+### Look at the unique values in order
+unique(index.munge$Coverage.KM)[order(unique(index.munge$Coverage.KM))]
+  
+##Amalgamate as necessary
+terms <- 'unknown'
+
+index.munge <- index.munge %>% mutate(Coverage.KM = ifelse(grepl(pattern = terms, Coverage.KM), 0, as.integer(Coverage.KM)-1))
+  
+##Check the work
+unique(index.munge$Coverage.KM)[order(unique(index.munge$Coverage.KM))]
+  
+##Munge 2 Experiment
+##Amalgamate as necessary
+terms <- list(
+Suspended.Sediment = c('^Sediments.Other$|^TSS$'),
+Algae = c('^Chl$|^Cyanobacteria$'),
+Carbon = c('^Carbon.Other$|^CDOM$|^DOC$'),
+Clarity = c('^Clarity$'),
+Turbidity = c('^turb|Turb|Turbidity|TURB$'),
+Nutrients = c('^Nutrients$|^Metals$'),
+Other = c('^Other$|Chromaticity|Trophic')
+)
+
+##Replace terms
+index.munge2 <- index.munge %>%
+  mutate(Year.Bin = paste0(index.munge$Year.Bin, '-', index.munge$Year.Bin + 5))
+for (i in 1:length(terms)) {
+index.munge2 <- index.munge2 %>% mutate(Parameter = ifelse(grepl(pattern = terms[[i]], Parameter), names(terms[i]), Parameter))
+}
+###Check work
+unique(index.munge2$Parameter)[order(unique(index.munge2$Parameter))]
 ```
 

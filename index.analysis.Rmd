@@ -31,6 +31,8 @@ Running Questions for Matt
          1         1         6         2         2         3        97        41       188         1         2         5 
 9) GO THROUGH ALL COLUMNS AND DECIDE WHAT TO KEEP! THESE ONES ARE MESSy:
   -Image.Composite, Best.AC, Constituent Transform, Bands, Classification(just not really used), 
+  
+10) 43 and 50, no ratings.
 
 ```{r}
 ## Munging
@@ -394,5 +396,69 @@ index.munge2 <- index.munge2 %>% mutate(Parameter = ifelse(grepl(pattern = terms
 }
 ###Check work
 unique(index.munge2$Parameter)[order(unique(index.munge2$Parameter))]
+```
+
+# Spatial Figures
+
+```{r}
+library(ggmap)
+library(maptools)
+library(maps)
+library(sf)
+library(rgdal)
+library(magrittr)
+library(viridis)
+
+check <- index.filt.sf <- index.filt %>% 
+  filter(Lat != 'Various') %>% 
+  mutate(Lat = as.numeric(levels(Lat))[Lat],
+         Long = as.numeric(levels(Long))[Long])
+
+index.filt.sf <- index.filt %>% 
+  filter(Lat != 'Various') %>% 
+  mutate(Lat = as.numeric(levels(Lat))[Lat],
+         Long = as.numeric(levels(Long))[Long]) %>%
+  na.omit() %>%
+  st_as_sf(.,coords=c('Long','Lat'),crs=4326) %>%
+  st_transform(.,54030)
+
+data("wrld_simpl")
+world = st_as_sf(wrld_simpl) %>%
+    st_transform(.,54030) %>%
+    st_buffer(.,0) 
+
+
+## Category Spatial
+ggplot() + geom_sf(data = world, aes(), fill = 'gray70', color = 'gray90') + 
+  geom_sf(data = index.filt.sf, aes(colour = Catv2), alpha =0.8) + 
+  coord_sf(ylim = c(-6000000, 8338578)) +
+  theme_bw() +
+  scale_colour_viridis_d(name = 'Paper \n Category') +
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks = element_blank(),
+        rect = element_blank(),
+        legend.position = c(0.2,0.22),
+        legend.background = element_rect(fill = 'white', colour = 'gray50'))
+
+
+# Pub Data Spatial
+png(filename='figures/PubYearSpatial1.png',width=8,height=6,units='in',res=250)
+ggplot() + geom_sf(data = world, aes(), fill = 'gray70', color = 'gray90') + 
+  geom_sf(data = index.filt.sf, aes(colour = Year), alpha =0.9) + 
+  coord_sf(ylim = c(-6000000, 8338578)) +
+  theme_bw() +
+  scale_colour_viridis(name = 'Publication Year') +
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks = element_blank(),
+        rect = element_blank(),
+        panel.grid.major = element_line(color = 'grey70'),
+        legend.position = c(0.2,0.22),
+        legend.background = element_rect(fill = 'white', colour = 'gray50'))
+dev.off()
+
+
+
 ```
 

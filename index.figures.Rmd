@@ -1,0 +1,312 @@
+---
+title: "index.figures"
+author: "Simon Topp"
+date: "7/6/2018"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Make some Figures!
+
+
+```{r}
+library(RColorBrewer)
+library(scales)
+
+munge <- index.munge
+
+#### Create Filtered List with  entry per paper for certain figures
+filt <- munge %>%
+  select(-c(Parameter, Landscape.var, Num.Models, Best.AC,Error.fit1, Error.fit2,Error.fit3,Error.val1,Error.val2,Error.val3,Fit.metric1, Fit.metric2,Fit.metric3,Val.metric1,Val.metric2,Val.metric3, Atm.Comp, Sensor, Sensor.Type)) %>%
+  distinct(ID, .keep_all = T) %>%
+  filter(!is.na(Figs.m),
+         !is.na(Model))
+
+####Figs
+
+#Parameter Distribution
+#Reorder Models
+munge$Model <- factor(munge$Model, levels = c('Empirical', 'Semi.Empirical', 'Semi.Analytical', 'Machine.Learning', 'Mixed', 'Product'))
+
+
+munge$Parameter <- factor(munge$Parameter, levels = c('Chl', 'TSS', 'Clarity', 'DOC', 'Nutrients', 'Turbidity', 'Carbon.Other', 'Cyanobacteria', 'Sediments.Other', 'Metals', 'Chromaticity', 'Trophic', 'Other'), labels = c('Chl', 'TSS', 'Clarity', 'CDOM', 'Nutrients', 'Turbidity', 'Other Carbon', 'Cyanobacteria', 'Other Sediments', 'Metals', 'Chromaticity', 'Trophic State', 'Other'))
+
+munge$Parameter.Grp <- factor(munge$Parameter.Grp, 
+                              levels = c("Algae","Carbon", "Clarity", "Suspended.Sediment","Turbidity", "Nutrients", "Other"))
+
+munge$Coverage.KM <- factor(munge$Coverage.KM, levels = c('1','2','3','4','5','6'), labels = c('10^1','10^2', '10^3', '10^4', '10^5', '10^6'))
+
+ggplot(munge %>%filter(!is.na(Parameter)&!is.na(Model)),
+       aes(Parameter, fill = Model)) + 
+        geom_bar() +
+        scale_fill_brewer(palette = 'Paired') +
+        theme_bw() + 
+        labs(x = 'Parameter', y = 'Count', 
+             fill = 'Modelling\nApproach') + 
+        theme(axis.text.x = element_text(angle = 90, hjust = 1),
+              legend.text=element_text(size=7))
+
+ggsave(filename='figures/ParamModelFill1.png',width=4,height=3,units='in',dpi=250)
+
+
+
+
+ggplot(munge%>% filter(!is.na(Parameter)), aes(x = Year.Bin, fill = Parameter.Grp)) + 
+  geom_bar() + 
+        scale_fill_brewer(palette = 'Paired') +
+  theme_bw() + 
+  labs(x = 'Years', y = 'Count') + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.text = element_text(size=7))
+ggsave(filename='figures/timeParamFill1.png',width=4,height=3,units='in',dpi=250)
+
+
+
+ggplot(munge%>% filter(!is.na(Parameter)), aes(x = Year, fill = Parameter.Grp)) + 
+        geom_density(position = 'fill', alpha = 0.5) + 
+        scale_y_continuous(labels = percent) +
+        scale_x_continuous(breaks = pretty_breaks(n=10)) +
+        scale_fill_brewer(palette = 'Paired') +
+        theme_bw() + 
+        labs(x = 'Years', y = 'Count') + 
+        theme(axis.text.x = element_text(angle = 90, hjust = 1),
+              legend.text=element_text(size=7))
+ggsave(filename='figures/timeParamFill2.png',width=4,height=3,units='in',dpi=250)
+
+
+
+
+ggplot(munge%>% filter(!is.na(Parameter)), aes(x = Year, stat(count), fill = Parameter.Grp)) + 
+        geom_density(position = 'stack', alpha = 0.5) + 
+        scale_fill_brewer(palette = 'Paired') +
+        theme_bw() + 
+        labs(x = 'Years', y = 'Count') + 
+        theme(axis.text.x = element_text(angle = 90, hjust = 1),
+              legend.text=element_text(size=7))
+
+
+
+ggsave(filename='figures/timeParamFill3.png',width=4,height=3,units='in',dpi=250)
+
+
+### Year Model Density
+
+viz <- function(data, x, fill, stack){
+        if(stack == 'stack'){
+             ggplot(data, aes(x = x, y = stat(count), fill = fill)) +
+                geom_density(position = 'stack', alpha = 0.6) + 
+                scale_fill_brewer(palette = 'Paired') +
+                theme_bw() + 
+                labs(x = 'Years', y = 'Count') + 
+                theme(axis.text.x = element_text(angle = 90, 
+                hjust = 1),legend.text=element_text(size=7))
+                        }
+        else{
+                ggplot(data, aes(x = x, fill = fill)) + 
+        geom_density(position = 'fill', alpha = 0.6) + 
+        scale_y_continuous(labels = percent) +
+        scale_x_continuous(breaks = pretty_breaks(n=10)) +
+        scale_fill_brewer(palette = 'Paired') +
+        theme_bw() + 
+        labs(x = 'Year', y = 'Distribution') + 
+        theme(axis.text.x = element_text(angle = 90, hjust = 1),
+              legend.text=element_text(size=7))
+        
+}}
+
+
+viz(filt, 'Year', 'model', 'fill')
+
+ggplot(filt, aes(x = Year, fill = Model)) + 
+        geom_density(position = 'fill') +  
+        scale_fill_brewer(palette = 'Paired') +
+        theme_bw() + 
+        labs(x = 'Years', y = 'Count') + 
+        theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+
+
+ggplot(filt, aes(x = Year.Bin, fill = as.factor(Coverage.KM))) + 
+  geom_bar() + 
+  theme_bw() + 
+  labs(x = 'Years', y = 'Count', fill = 'Coverage Mangitude \n 10km ^ i') + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+ggplot(filt, aes(x = Year.Bin, fill = Time.Bin)) + 
+  geom_bar() + 
+  theme_bw() + 
+  labs(x = 'Years', y = 'Count', fill = 'Timespan') + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+###
+ggplot(filt, aes(x = Time.Bin, fill = as.factor(Coverage.KM))) + 
+  geom_bar() + 
+  theme_bw() + 
+  labs(x = 'Time Span', y = 'Count', fill = 'Coverage Mangitude \n 10km ^ i') + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+
+ggplot(filt, aes(x = Year.Bin, fill = Time.Bin)) + 
+  geom_bar() + 
+  theme_bw() + 
+  labs(x = 'Time Span', y = 'Count') + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+ggplot(filt, aes(x = Time.Bin, fill = as.factor(Coverage.KM))) + geom_bar()
+
+
+
+ggplot(index %>% filter(Constituent > 1), aes(x = Constituent)) + geom_bar()
+
+ggplot(munge %>% distinct(Paper.ID, keep_all = T), aes(x = Year.Bin, fill = Catv2)) + geom_bar() + labs(fill = 'Category')
+
+ggplot(in.filt, aes(x = Decade, fill = as.factor(Scale))) + geom_bar() + labs(title = "Order of magnitude study scale (sq. km)", fill = 'Scale')
+
+ggplot(in.filt, aes(x = Decade, fill = Time.Bin)) + geom_bar() + labs(title = "Study Period Length by Decade)", fill = 'Length')
+
+
+ggplot(in.filt, aes(x = Scale))
+
+in.filt$Scale[in.filt$Scale == 6] = 4
+
+```
+
+
+##Scopus Scrape
+```{r}
+
+scrape <- read.csv('scopusLakes.csv') %>%
+  bind_rows(read.csv('scopusRivers.csv'))%>%
+  bind_rows(read.csv('scopusInlandWaters.csv'))%>%
+  Distinct()
+
+ggplot(scrape, aes(x = Year)) + geom_bar() + labs(title = 'Historic Publications Count')
+
+```
+
+
+
+
+## Temp
+
+```{r}
+```
+
+# Spatial Figures
+
+```{r}
+library(ggmap)
+library(maptools)
+library(maps)
+library(sf)
+library(rgdal)
+library(magrittr)
+library(viridis)
+
+check <- filt.sf <- filt %>% 
+  filter(Lat != 'Various') %>% 
+  mutate(Lat = as.numeric(levels(Lat))[Lat],
+         Long = as.numeric(levels(Long))[Long])
+
+filt.sf <- filt %>% 
+  filter(Lat != 'Various') %>% 
+  mutate(Lat = as.numeric(levels(Lat))[Lat],
+         Long = as.numeric(levels(Long))[Long]) %>%
+  na.omit() %>%
+  st_as_sf(.,coords=c('Long','Lat'),crs=4326) %>%
+  st_transform(.,54030)
+
+data("wrld_simpl")
+world = st_as_sf(wrld_simpl) %>%
+    st_transform(.,54030) %>%
+    st_buffer(.,0) 
+
+
+## Category Spatial
+ggplot() + geom_sf(data = world, aes(), fill = 'gray70', color = 'gray90') + 
+  geom_sf(data = filt.sf, aes(colour = Catv2), alpha =0.8) + 
+  coord_sf(ylim = c(-6000000, 8338578)) +
+  theme_bw() +
+  scale_colour_viridis_d(name = 'Paper \n Category') +
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks = element_blank(),
+        rect = element_blank(),
+        legend.position = c(0.2,0.22),
+        legend.background = element_rect(fill = 'white', colour = 'gray50'))
+
+
+# Pub Data Spatial
+png(filename='figures/PubYearSpatial1.png',width=8,height=6,units='in',res=250)
+ggplot() + geom_sf(data = world, aes(), fill = 'gray70', color = 'gray90') + 
+  geom_sf(data = filt.sf, aes(colour = Year), alpha =0.9) + 
+  coord_sf(ylim = c(-6000000, 8338578)) +
+  theme_bw() +
+  scale_colour_viridis(name = 'Publication Year') +
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks = element_blank(),
+        rect = element_blank(),
+        panel.grid.major = element_line(color = 'grey70'),
+        legend.position = c(0.2,0.22),
+        legend.background = element_rect(fill = 'white', colour = 'gray50'))
+dev.off()
+
+
+# Timespan Spatial
+png(filename='figures/TimeSpatial1.png',width=8,height=6,units='in',res=250)
+ggplot() + geom_sf(data = world, aes(), fill = 'gray70', color = 'gray90') + 
+  geom_sf(data = filt.sf, aes(colour = Time.Bin), alpha =0.9) + 
+  coord_sf(ylim = c(-6000000, 8338578)) +
+  theme_bw() +
+  scale_colour_viridis_d(name = 'Time Span') +
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks = element_blank(),
+        rect = element_blank(),
+        panel.grid.major = element_line(color = 'grey70'),
+        legend.position = c(0.2,0.22),
+        legend.background = element_rect(fill = 'white', colour = 'gray50'))
+dev.off()
+
+#Mag Spatial
+png(filename='figures/MagSpatial1.png',width=8,height=6,units='in',res=250)
+ggplot() + geom_sf(data = world, aes(), fill = 'gray70', color = 'gray90') + 
+  geom_sf(data = filt.sf %>% filter(Coverage.KM != 'unknown'), aes(colour = Coverage.KM), alpha =0.9) +
+  coord_sf(ylim = c(-6000000, 8338578)) +
+  theme_bw() +
+  scale_colour_viridis_d(name = 'Coverage (Order\nof Magnitude)') +
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks = element_blank(),
+        rect = element_blank(),
+        panel.grid.major = element_line(color = 'grey70'),
+        legend.position = c(0.2,0.22),
+        legend.background = element_rect(fill = 'white', colour = 'gray50'))
+dev.off()
+
+
+
+## Figs Distribution Plot
+
+df <- filt %>%
+  mutate(fig.total = Figs.m + Figs.v + Figs.t) %>%
+  gather(c(Figs.m:Figs.t), key = 'fig.type', value = 'fig.count') %>%
+  na.omit() %>%
+  mutate(fig.type = factor(fig.type, levels = c('Figs.m', 'Figs.v', 'Figs.t'), labels = c('Background', 'Validation', 'Applied')),
+         Catv2 = factor(Catv2, levels = c('Methods', 'Trends', 'Causal'), labels = c('Methods', 'Trends', 'Causal')))
+
+
+ggplot(df, aes(x = Catv2, y = fig.count/fig.total)) + geom_violin(aes(colour = fig.type)) + theme_bw() + labs(x = 'Paper Category', y = 'Figure Proportion')
+
+ggplot(df, aes(x = Catv2, y = fig.count/fig.total)) + geom_boxplot(aes(colour = fig.type)) + labs(x = 'Paper Category', y = 'Figure Proportion', colour = 'Figure Type')
+
+ggplot(df, aes(x = Catv2, y = fig.count/fig.total)) + geom_col(aes(colour = fig.type)) + theme_bw()
+
+
+```

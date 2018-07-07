@@ -9,24 +9,24 @@ editor_options:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+
+library(RColorBrewer)
+library(scales)
+library(tidyverse)
+library(gridExtra)
+library(grid)
+library(lattice)
+library(cowplot)
+library(ggpubr)
 ```
 
 # Make some Figures!
 
 
 ```{r}
-library(RColorBrewer)
-library(scales)
-
-munge <- index.munge
+munge <- index.munge %>% filter(!is.na(Parameter.Grp))
 
 #### Create Filtered List with  entry per paper for certain figures
-filt <- munge %>%
-  select(-c(Parameter, Landscape.var, Num.Models, Best.AC,Error.fit1, Error.fit2,Error.fit3,Error.val1,Error.val2,Error.val3,Fit.metric1, Fit.metric2,Fit.metric3,Val.metric1,Val.metric2,Val.metric3, Atm.Comp, Sensor, Sensor.Type)) %>%
-  distinct(ID, .keep_all = T) %>%
-  filter(!is.na(Figs.m),
-         !is.na(Model))
-
 ####Figs
 
 #Parameter Distribution
@@ -41,7 +41,272 @@ munge$Parameter.Grp <- factor(munge$Parameter.Grp,
 
 munge$Coverage.KM <- factor(munge$Coverage.KM, levels = c('1','2','3','4','5','6'), labels = c('10^1','10^2', '10^3', '10^4', '10^5', '10^6'))
 
-ggplot(munge %>%filter(!is.na(Parameter)&!is.na(Model)),
+munge$Cat <- factor(munge$Cat, levels = c('Methods', 'Trends', 'Causal'))
+
+
+#Create Filtered Set With only 1 entry per paper.
+filt <- munge %>%
+  select(-c(Parameter, Landscape.var, Num.Models, Best.AC,Error.fit1, Error.fit2,Error.fit3,Error.val1,Error.val2,Error.val3,Fit.metric1, Fit.metric2,Fit.metric3,Val.metric1,Val.metric2,Val.metric3, Atm.Comp, Sensor, Sensor.Type)) %>%
+  distinct(ID, .keep_all = T) %>%
+  filter(!is.na(Figs.m),
+         !is.na(Model),
+         !is.na(Coverage.KM))
+
+```
+
+#Figs
+
+
+```{r}
+### Year Model Density
+
+viz <- function(data, x, fill, stack, label){
+        if(stack == 'stack'){
+        plot <-ggplot(data, aes(x = x, y = stat(count), fill = fill)) +
+                geom_density(position = 'stack', alpha = 0.6) + 
+                scale_fill_brewer(palette = 'Paired') +
+                scale_x_continuous(breaks = pretty_breaks(n=10)) +
+                theme_bw() + 
+                labs(x = 'Years', y = 'Count', fill = label) + 
+                theme(axis.text.x = element_text(angle = 90, hjust = 1),
+                legend.text=element_text(size=7),
+                axis.title = element_blank(),
+                legend.position = 'top',
+                legend.title=element_text(size=9),
+                legend.key.size = unit(0.5,'cm')) +
+                guides(fill = guide_legend(nrow = 2, title.position = 'top'))
+        } 
+        if(stack == 'fill'){
+        plot <- ggplot(data, aes(x = x, fill = fill)) + 
+        geom_density(position = 'fill', alpha = 0.6) + 
+        scale_y_continuous(labels = percent) +
+        scale_x_continuous(breaks = pretty_breaks(n=10)) +
+        scale_fill_brewer(palette = 'Paired') +
+        theme_bw() + 
+        labs(x = 'Year', y = 'Distribution', fill = label) + 
+        theme(axis.text.x = element_text(angle = 90, hjust = 1),
+              legend.text=element_text(size=7),
+              axis.title = element_blank(),
+              legend.position = 'top',
+              legend.title=element_text(size=9),
+              legend.key.size = unit(0.5,'cm')) +
+        guides(fill = guide_legend(nrow = 2, title.position = 'top'))
+        }
+  return(plot)
+  }
+
+
+####Yearly Distributions
+
+
+#########Fill Figure
+##Year Params Groups
+p1 <- viz(munge, munge$Year, munge$Parameter.Grp, 'fill', 'Modelled Parameters') + scale_fill_brewer(breaks = c('Clarity', 'Suspended.Sediment', 'Carbon', 'Algae','Turbidity', 'Nutrients', 'Other'), labels = c('Clarity', 'Suspended\nSediment', 'Carbon', 'Algae','Turbidity', 'Nutrients', 'Other'), palette = 'Paired')
+
+##Year Modelling Approach Groups
+p2 <- viz(filt, filt$Year, filt$Model, 'fill', 'Modelling Approach')
+
+## Year Coverage Fill
+p3 <- viz(filt, filt$Year, filt$Coverage.KM, 'fill', expression(paste('Coverage Scale (km'^'2',')')))
+
+## Year Years Fill
+p4 <- viz(filt, filt$Year, filt$Time.Bin, 'fill', 'Study Duration')
+
+g <- grid.arrange(
+  grobs = list(p1,p2,p3,p4),
+  layout_matrix = rbind(c(1, 2),
+                        c(3, 4)),
+  left = 'Distribution',
+  bottom = 'Year'
+)
+
+ggsave(filename='figures/YearDistv2.png',plot = g, width=6.5,height=6, units='in', dpi=250)
+
+#############Stack Figure
+##Year Params Groups
+p1 <- viz(munge, munge$Year, munge$Parameter.Grp, 'stack', 'Modelled Parameters')
+
+##Year Modelling Approach Groups
+p2 <- viz(filt, filt$Year, filt$Model, 'stack', 'Modelling Approach')
+
+## Year Coverage Fill
+p3 <- viz(filt, filt$Year, filt$Coverage.KM, 'stack', expression(paste('Coverage Scale (km'^'2*)')))
+
+## Year Years Fill
+p4 <- viz(filt, filt$Year, filt$Time.Bin, 'stack', 'Study Duration')
+
+g <- grid.arrange(
+  grobs = list(p1,p3,p2,p4),
+  layout_matrix = rbind(c(1, 2),
+                        c(3, 4)),
+  left = 'Distribution',
+  bottom = 'Year'
+)
+ggsave(filename='figures/YearDistStack.png',plot = g, width=6.5,height=6, units='in', dpi=250)
+
+
+
+##### Extraneous single panel
+
+##Timescale and Scale?
+viz(filt, filt$Years, filt$Coverage.KM, 'fill', 'Study\nDuration')
+
+viz(filt, filt$Year, filt$Cat, 'fill', 'Study Category')
+
+viz(filt, as.numeric(filt$Coverage.KM), filt$Parameter.Grp, 'fill', 'Study Category')
+
+viz(filt, filt$Year, filt$Cat, 'fill', 'Study Category')
+
+ggplot(filt, aes(x = Cat, y = as.numeric(Coverage.KM), colour = Parameter.Grp)) + geom_boxplot()
+
+
+###Stacked Bar
+p1 <- ggplot(munge, aes(x= Parameter, y= ..count.., fill = Model)) + 
+  geom_bar()+
+  scale_fill_brewer(palette = "Paired") +
+  labs(x = 'Parameter', fill = 'Modelling\nApproach') +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+              legend.text=element_text(size=6),
+              legend.title=element_text(size=8),
+              legend.key.size = unit(0.5,'cm'),
+              axis.title.y = element_blank(),
+              axis.text=element_text(size=6),
+               axis.title=element_text(size=8)
+        )
+        
+p2 <- ggplot(filt, aes(x = Year.Bin, y = ..count.., fill = Model)) + 
+  geom_bar() +
+  scale_fill_brewer(palette = "Paired") +
+  labs(x = 'Time Period', y = 'Publication Count') +
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position = 'none',
+        axis.text=element_text(size=6),
+        axis.title=element_text(size=8),
+        axis.title.x = element_text(margin = margin(t = 18)))
+              
+
+g <- grid.arrange(p2, p1, ncol = 2, widths = c(1.5,2))
+ggsave(filename='figures/YearParam2Panel.png',plot = g, width=6,height=2.8, units='in', dpi=250)
+
+ggsave()
+ggplot(munge %>% distinct(Paper.ID, keep_all = T), aes(x = Year.Bin, fill = Catv2)) + geom_bar() + labs(fill = 'Category')
+```
+
+## Correlation Analysis
+```{r}
+library(GGally)
+
+df.cor <- filt %>% 
+  dplyr::select(Coverage.KM, Years, Parameter.Grp, Cat) %>%
+  mutate(Coverage.KM = as.numeric(Coverage.KM))
+
+ggpairs(df.cor, package = 'reshape')
+
+```
+
+
+##Scopus Scrape
+```{r}
+##This workflow works with the scraper code, but it's nice to have keywords, so all the analysis is done with scopus results from their actual GUI.
+
+myQuery <- 'KEY("remote sensing" AND "water quality" AND "River" OR "lake" OR "reservoir")'
+
+theXML <- searchByString(string = myQuery, content = 'standard', outfile = "scopusLakes.xml")
+
+theData <- extractXML(theXML)
+
+write.csv(theData, file = "scrapeRLakes.csv")
+
+scrape <- read.csv('ScopusScape/scopusLakes.csv') %>%
+  bind_rows(read.csv('ScopusScape/scopusLakes.csv')) %>%
+  bind_rows(read.csv('ScopusScape/scopusRivers.csv')) %>%
+  bind_rows(read.csv('ScopusScape/scopusInlandWaters.csv')) %>%
+  bind_rows(read.csv('ScopusScape/scopusDeltaEstuary.csv'))
+
+scrape <- scrape %>%
+  mutate(Lakes = ifelse(grepl(pattern = c('lake|reservoir'), Author.Keywords,
+                                     ignore.case = T),1, 0),
+          Rivers = ifelse(grepl(pattern = c('river'), Author.Keywords,
+                               ignore.case = T), 1, 0),
+          Deltas = ifelse(grepl(pattern = c('delta'), Author.Keywords,
+                               ignore.case = T), 1, 0),
+          Estuaries = ifelse(grepl(pattern = c('estuary|estuaries'), Author.Keywords,
+                               ignore.case = T), 1, 0))
+  scrape.sum <- scrape %>%
+    summarize(Lakes = sum(Lakes),
+              Rivers = sum(Rivers),
+              Estuaries = sum(Estuaries),
+              Deltas = sum(Deltas))
+        
+  
+  
+  mutate(Keywords = ifelse(grepl(pattern = c('lake|reservoir'), Author.Keywords, ignore.case = T) == T & Keywords != 'Lakes and Rivers', 'Lakes', 'Other')) %>%
+  mutate(Keywords = ifelse(grepl(pattern = 'river', Author.Keywords, ignore.case = T) & !(grepl(pattern = 'lake', Keywords, ignore.case = T)), 'Rivers', 'Other')) %>%
+  mutate(Keywords = ifelse(grepl(pattern = 'delta', Author.Keywords, ignore.case = T) & !(grepl(pattern = c('lake|river'), Keywords, ignore.case = T)), 'Delta', 'Other')) %>%
+  mutate(Keywords = ifelse(grepl(pattern = 'estuary|estuaries', Author.Keywords, ignore.case = T) & !(grepl(pattern = c('lake|river|delta'), Keywords, ignore.case = T)), 'Estuary', 'Other')) 
+           
+
+scrape <- read.csv('scopusLakes.csv') %>%
+  bind_rows(read.csv('scopusRivers.csv'))%>%
+  bind_rows(read.csv('scopusInlandWaters.csv'))%>%
+  Distinct()
+
+ggplot(scrape, aes(x = Year)) + geom_bar() + labs(title = 'Historic Publications Count')
+
+```
+
+## Word Cloud Experiment
+```{r}
+# Load
+library("tm")
+library("SnowballC")
+library("wordcloud")
+library("RColorBrewer")
+
+keywords <- write(scrape$Author.Keywords, 'ScopusScape/scrape.txt')
+keys <- readLines('ScopusScape/scrape.txt')
+docs <- Corpus(VectorSource(keys))
+inspect(docs)
+
+# Convert the text to lower case
+docs <- tm_map(docs, content_transformer(tolower))
+# Remove numbers
+docs <- tm_map(docs, removeNumbers)
+# Remove english common stopwords
+docs <- tm_map(docs, removeWords, stopwords("english"))
+# Remove your own stop word
+# specify your stopwords as a character vector
+# Remove punctuations
+docs <- tm_map(docs, removePunctuation)
+# Eliminate extra white spaces
+docs <- tm_map(docs, stripWhitespace)
+# Text stemming
+# docs <- tm_map(docs, stemDocument)
+inspect(docs)
+
+dtm <- TermDocumentMatrix(docs)
+m <- as.matrix(dtm)
+v <- sort(rowSums(m),decreasing=TRUE)
+d <- data.frame(word = names(v),freq=v)
+head(d, 10)
+d <- d %>% filter(freq < 1000)
+set.seed(1234)
+wordcloud(words = d$word, freq = d$freq, min.freq = 5,
+          max.words=200, random.order=T, rot.per=0.35, 
+          colors=brewer.pal(8, "Dark2"))
+?wordcloud
+
+```
+
+
+
+
+## Temp
+
+```{r}
+p5 <- ggplot(munge %>%filter(!is.na(Parameter)&!is.na(Model)),
        aes(Parameter, fill = Model)) + 
         geom_bar() +
         scale_fill_brewer(palette = 'Paired') +
@@ -91,110 +356,6 @@ ggplot(munge%>% filter(!is.na(Parameter)), aes(x = Year, stat(count), fill = Par
 
 
 
-ggsave(filename='figures/timeParamFill3.png',width=4,height=3,units='in',dpi=250)
-
-
-### Year Model Density
-
-viz <- function(data, x, fill, stack){
-        if(stack == 'stack'){
-             ggplot(data, aes(x = x, y = stat(count), fill = fill)) +
-                geom_density(position = 'stack', alpha = 0.6) + 
-                scale_fill_brewer(palette = 'Paired') +
-                theme_bw() + 
-                labs(x = 'Years', y = 'Count') + 
-                theme(axis.text.x = element_text(angle = 90, 
-                hjust = 1),legend.text=element_text(size=7))
-                        }
-        else{
-                ggplot(data, aes(x = x, fill = fill)) + 
-        geom_density(position = 'fill', alpha = 0.6) + 
-        scale_y_continuous(labels = percent) +
-        scale_x_continuous(breaks = pretty_breaks(n=10)) +
-        scale_fill_brewer(palette = 'Paired') +
-        theme_bw() + 
-        labs(x = 'Year', y = 'Distribution') + 
-        theme(axis.text.x = element_text(angle = 90, hjust = 1),
-              legend.text=element_text(size=7))
-        
-}}
-
-
-viz(filt, 'Year', 'model', 'fill')
-
-ggplot(filt, aes(x = Year, fill = Model)) + 
-        geom_density(position = 'fill') +  
-        scale_fill_brewer(palette = 'Paired') +
-        theme_bw() + 
-        labs(x = 'Years', y = 'Count') + 
-        theme(axis.text.x = element_text(angle = 90, hjust = 1))
-
-
-
-ggplot(filt, aes(x = Year.Bin, fill = as.factor(Coverage.KM))) + 
-  geom_bar() + 
-  theme_bw() + 
-  labs(x = 'Years', y = 'Count', fill = 'Coverage Mangitude \n 10km ^ i') + 
-  theme(axis.text.x = element_text(angle = 90, hjust = 1))
-
-ggplot(filt, aes(x = Year.Bin, fill = Time.Bin)) + 
-  geom_bar() + 
-  theme_bw() + 
-  labs(x = 'Years', y = 'Count', fill = 'Timespan') + 
-  theme(axis.text.x = element_text(angle = 90, hjust = 1))
-
-###
-ggplot(filt, aes(x = Time.Bin, fill = as.factor(Coverage.KM))) + 
-  geom_bar() + 
-  theme_bw() + 
-  labs(x = 'Time Span', y = 'Count', fill = 'Coverage Mangitude \n 10km ^ i') + 
-  theme(axis.text.x = element_text(angle = 90, hjust = 1))
-
-
-ggplot(filt, aes(x = Year.Bin, fill = Time.Bin)) + 
-  geom_bar() + 
-  theme_bw() + 
-  labs(x = 'Time Span', y = 'Count') + 
-  theme(axis.text.x = element_text(angle = 90, hjust = 1))
-
-ggplot(filt, aes(x = Time.Bin, fill = as.factor(Coverage.KM))) + geom_bar()
-
-
-
-ggplot(index %>% filter(Constituent > 1), aes(x = Constituent)) + geom_bar()
-
-ggplot(munge %>% distinct(Paper.ID, keep_all = T), aes(x = Year.Bin, fill = Catv2)) + geom_bar() + labs(fill = 'Category')
-
-ggplot(in.filt, aes(x = Decade, fill = as.factor(Scale))) + geom_bar() + labs(title = "Order of magnitude study scale (sq. km)", fill = 'Scale')
-
-ggplot(in.filt, aes(x = Decade, fill = Time.Bin)) + geom_bar() + labs(title = "Study Period Length by Decade)", fill = 'Length')
-
-
-ggplot(in.filt, aes(x = Scale))
-
-in.filt$Scale[in.filt$Scale == 6] = 4
-
-```
-
-
-##Scopus Scrape
-```{r}
-
-scrape <- read.csv('scopusLakes.csv') %>%
-  bind_rows(read.csv('scopusRivers.csv'))%>%
-  bind_rows(read.csv('scopusInlandWaters.csv'))%>%
-  Distinct()
-
-ggplot(scrape, aes(x = Year)) + geom_bar() + labs(title = 'Historic Publications Count')
-
-```
-
-
-
-
-## Temp
-
-```{r}
 ```
 
 # Spatial Figures
@@ -310,3 +471,24 @@ ggplot(df, aes(x = Catv2, y = fig.count/fig.total)) + geom_col(aes(colour = fig.
 
 
 ```
+
+```{r}
+dsamp <- diamonds[sample(nrow(diamonds), 1000), ] 
+
+p1 <- qplot(carat, price, data=dsamp, colour=clarity)
+p2 <- qplot(carat, price, data=dsamp, colour=clarity, geom="path")
+
+leg <- ggplotGrob(p1)
+
+legend=gTree(children=gList(leg), cl="legendGrob")
+widthDetails.legendGrob <- function(x) unit(2, "cm")
+
+grid.arrange(grobs = list(p1 + theme(legend.position="none"),
+p2 + theme(legend.position="none")),
+legend=legend,
+main ="this is a title",
+left = "This is my global Y-axis title")
+
+
+```
+

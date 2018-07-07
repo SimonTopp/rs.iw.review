@@ -57,7 +57,7 @@ index.munge <- index %>%
   mutate(Cat = if_else(Rating < 5, 'Methods', ifelse(Rating > 7, 'Causal','Trends')),
          Year.Bin = paste0(trunc(Year/5) * 5,'-', trunc(Year/5) * 5 + 5),
          Time.Bin= cut(Years, breaks = c(-Inf, 1/365, 1/12, 1, 5, 10, Inf),
-                        labels = c('< Day', '< 1 Month', '< 1 Year', '1-5 Years', '5-10 Years','>10 Years')))
+                        labels = c('Snapshot', '< 1 Month', '< 1 Year', '1-5 Years', '5-10 Years','>10 Years')))
 
 
 
@@ -312,13 +312,15 @@ for (i in 1:length(index.munge$DOI)){
 }
 
 
-dois <- index.munge %>% distinct(DOI.Short, .keep_all=T)
-write(dois$DOI.Short, 'dois.txt')  
-
-query <- searchByID(theIDs = 'dois.txt', idtype = 'doi', content = 'standard', outfile = 'dois.xml')
-
-doisR <- extractXML('dois.xml') %>% 
-  select(doi, Title = articletitle, Journal = journal, Cite.Count = timescited)
+# 
+# dois <- index.munge %>% distinct(DOI.Short, .keep_all=T)
+# 
+# write(dois$DOI.Short, 'dois.txt')  
+# 
+# query <- searchByID(theIDs = 'dois.txt', idtype = 'doi', content = 'standard', outfile = 'dois.xml')
+# 
+# doisR <- extractXML('dois.xml') %>% 
+#   select(doi, Title = articletitle, Journal = journal, Cite.Count = timescited)
 
 index.munge <- index.munge %>%
   left_join(doisR, by = c('DOI.Short' = 'doi'))

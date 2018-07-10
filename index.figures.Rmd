@@ -16,8 +16,7 @@ library(tidyverse)
 library(gridExtra)
 library(grid)
 library(lattice)
-library(cowplot)
-library(ggpubr)
+
 ```
 
 # Make some Figures!
@@ -194,76 +193,190 @@ ggsave()
 ggplot(munge %>% distinct(Paper.ID, keep_all = T), aes(x = Year.Bin, fill = Catv2)) + geom_bar() + labs(fill = 'Category')
 ```
 
-## Correlation Analysis
+
+
+
+##Average Cites per year plot pulled from biblio git
+
 ```{r}
-library(GGally)
 
-df.cor <- filt %>% 
-  dplyr::select(Coverage.KM, Years, Parameter.Grp, Cat) %>%
-  mutate(Coverage.KM = as.numeric(Coverage.KM))
+x <- results
+TcYr=aggregate(x$TotalCitation,by=list(x$Years),length)
+TcYr$xx=aggregate(x$TotalCitation,by=list(x$Years),mean)$x
+TcYr$Annual=NA
+d=date()
+d=as.numeric(substring(d,nchar(d)-3,nchar(d)))
+TcYr$Years=d-TcYr$Group.1
+TcYr$Annual=TcYr$xx/TcYr$Years
+names(TcYr)=c("Year","N","MeanTCperArt","MeanTCperYear","CitableYears")
+  
+  ## inserting missing years
+  YY=setdiff(seq(min(x$Years),max(x$Years)),TcYr$Year)
+  if (length(YY>0)){
+  YY=data.frame(YY,0,0,0,0)
+  names(YY)=c("Year","N","MeanTCperArt","MeanTCperYear","CitableYears")
+  TcYr=rbind(TcYr,YY)
+  TcYr=TcYr[order(TcYr$Year),]
+  row.names(TcYr)=TcYr$Year}
+  
+  
+  
+  g=ggplot(TcYr, aes(x = TcYr$Year, y = TcYr$MeanTCperYear)) +
+    geom_line() +
+    geom_area(fill = '#002F80', alpha = .5) +
+    labs(x = 'Year'
+         , y = 'Citations'
+         , title = "Average Article Citations per Year")+
+    scale_x_continuous(breaks= (TcYr$Year[seq(1,length(TcYr$Year),by=2)])) +
+    theme(text = element_text(color = "#444444")
+          ,panel.background = element_rect(fill = '#EFEFEF')
+          ,panel.grid.minor = element_line(color = '#FFFFFF')
+          ,panel.grid.major = element_line(color = '#FFFFFF')
+          ,plot.title = element_text(size = 24)
+          ,axis.title = element_text(size = 14, color = '#555555')
+          ,axis.title.y = element_text(vjust = 1, angle = 0)
+          ,axis.title.x = element_text(hjust = 0)
+    ) 
 
-ggpairs(df.cor, package = 'reshape')
+TcYr <- TcYr %>%
+  mutate(CiteArtYear = MeanTCperYear*N)
+
+for (i in 1:48){
+#if(i == 1){
+  TcYr$yearly.cites[i] <- sum(TcYr$CiteArtYear[1:i])
+}
+
+TcYr$yearly.cites[TcYr$Year == 2018] =  TcYr$yearly.cites[TcYr$Year == 2017]
 
 ```
-
 
 ##Scopus Scrape
 ```{r}
 ##This workflow works with the scraper code, but it's nice to have keywords, so all the analysis is done with scopus results from their actual GUI.
-
-myQuery <- 'KEY("remote sensing" AND "water quality" AND "River" OR "lake" OR "reservoir")'
-
-theXML <- searchByString(string = myQuery, content = 'standard', outfile = "scopusLakes.xml")
-
-theData <- extractXML(theXML)
-
-write.csv(theData, file = "scrapeRLakes.csv")
+# 
+# myQuery <- 'KEY("remote sensing" AND "water quality" AND "River" OR "lake" OR "reservoir")'
+# 
+# theXML <- searchByString(string = myQuery, content = 'standard', outfile = "scopusLakes.xml")
+# 
+# theData <- extractXML(theXML)
+# 
+# write.csv(theData, file = "scrapeRLakes.csv")
 
 scrape <- read.csv('ScopusScape/scopusLakes.csv') %>%
-  bind_rows(read.csv('ScopusScape/scopusLakes.csv')) %>%
   bind_rows(read.csv('ScopusScape/scopusRivers.csv')) %>%
   bind_rows(read.csv('ScopusScape/scopusInlandWaters.csv')) %>%
   bind_rows(read.csv('ScopusScape/scopusDeltaEstuary.csv'))
 
+
+###Bring in each search seperately for labeling
+Lakes <- read.csv('ScopusScape/scopusLakes.csv') %>% mutate(Lakes = 1)
+Rivers <- read.csv('ScopusScape/scopusRivers.csv') %>% mutate(Rivers = 1)
+InlandWater <- read.csv('ScopusScape/scopusInlandWaters.csv') %>% mutate(InlandWater = 1)
+Estuary.Delta <- read.csv('ScopusScape/scopusDeltaEstuary.csv') %>% mutate(Estuaries =1 )
+
+scrape <- Lakes %>% full_join(Rivers) %>% full_join(InlandWater) %>%full_join(Estuary.Delta) %>%
+  mutate(Lakes = ifelse(is.na(Lakes), 0, Lakes),
+         Rivers = ifelse(is.na(Rivers), 0, Rivers),
+         InlandWater = ifelse(is.na(InlandWater),0,InlandWater),
+         Estuaries = ifelse(is.na(Estuaries), 0, Estuaries)) %>%
+  filter(!is.na(Source.title),
+         Source.title != '',
+         Document.Type == 'Article' | Document.Type == 'Article in Press')
+
 scrape <- scrape %>%
-  mutate(Lakes = ifelse(grepl(pattern = c('lake|reservoir'), Author.Keywords,
-                                     ignore.case = T),1, 0),
-          Rivers = ifelse(grepl(pattern = c('river'), Author.Keywords,
-                               ignore.case = T), 1, 0),
-          Deltas = ifelse(grepl(pattern = c('delta'), Author.Keywords,
-                               ignore.case = T), 1, 0),
-          Estuaries = ifelse(grepl(pattern = c('estuary|estuaries'), Author.Keywords,
-                               ignore.case = T), 1, 0))
-  scrape.sum <- scrape %>%
-    summarize(Lakes = sum(Lakes),
-              Rivers = sum(Rivers),
-              Estuaries = sum(Estuaries),
-              Deltas = sum(Deltas))
-        
-  
-  
-  mutate(Keywords = ifelse(grepl(pattern = c('lake|reservoir'), Author.Keywords, ignore.case = T) == T & Keywords != 'Lakes and Rivers', 'Lakes', 'Other')) %>%
-  mutate(Keywords = ifelse(grepl(pattern = 'river', Author.Keywords, ignore.case = T) & !(grepl(pattern = 'lake', Keywords, ignore.case = T)), 'Rivers', 'Other')) %>%
-  mutate(Keywords = ifelse(grepl(pattern = 'delta', Author.Keywords, ignore.case = T) & !(grepl(pattern = c('lake|river'), Keywords, ignore.case = T)), 'Delta', 'Other')) %>%
-  mutate(Keywords = ifelse(grepl(pattern = 'estuary|estuaries', Author.Keywords, ignore.case = T) & !(grepl(pattern = c('lake|river|delta'), Keywords, ignore.case = T)), 'Estuary', 'Other')) 
-           
+  mutate(Waterbody = ifelse(Estuaries == 1, 'Estuaries and Deltas',ifelse(Rivers == 1, 'Rivers', ifelse(Lakes == 1, 'Lakes', 'Inland Waters')))) %>%
+  mutate(Waterbody = ifelse(Lakes == 1 & Rivers == 1, 'Lakes and Rivers', Waterbody)) %>% distinct(Title, Source.title, .keep_all = T)
 
-scrape <- read.csv('scopusLakes.csv') %>%
-  bind_rows(read.csv('scopusRivers.csv'))%>%
-  bind_rows(read.csv('scopusInlandWaters.csv'))%>%
-  Distinct()
 
-ggplot(scrape, aes(x = Year)) + geom_bar() + labs(title = 'Historic Publications Count')
+## Pull Most Cited Papers from Bibliometrix results
+cites <- as.tibble(summ$MostCitedPapers)
+
+##Pull Country and Citation Production out
+countries <- factor(summ$MostProdCountries$`Country  `)
+count <- as.numeric(summ$MostProdCountries$Articles)
+country10 <- bind_cols(Country = countries,Publications = count)
+country10$Country <- reorder(country10$Country, country10$Publications)
+
+## Pull most relevant sources
+sources <- factor(summ$MostRelSources$`Sources       `)
+count <- as.numeric(summ$MostRelSources$Articles)
+Source10 <- bind_cols(Journal = sources,Publications = count)
+
+Source10$Journal <- reorder(Source10$Journal, Source10$Publications)
+
+
+## Publications Per Journal and Country
+p1 <- ggplot(country10, aes(x = Country, y = Publications)) +
+  geom_col() + 
+  scale_x_discrete(labels = c('Finland', 'Germany', 'Brazil', 'Australia', 'Canada', 'Italy', 'Netherlands', 'India', 'China', 'USA')) +
+  theme_bw() + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))#,
+        #axis.title.x = element_text(margin = margin(t = 30, b = 25)))
+
+p2 <- ggplot(Source10, aes(x = Journal, y = Publications)) +
+  geom_col() + theme_bw() + 
+  scale_x_discrete(labels = c('Spectroscopy and \nSpectral Analysis (China)', 'J. of Env. Management', 'J. of Great\nLakes Research', 'Environmental Science\n(China)', 'Photogr. Eng. and\nRemote Sensing','Remote Sensing', 'Sci. of the Total\nEnvironment', 'Env. Monitoring\n and Assessment', 'Int. Journal of \nRemote Sensing', 'Remote Sensing\nof Environment')) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))#,
+       # axis.title.y = element_blank())
+
+
+g <- grid.arrange(p1, p2, nrow = 2, heights = c(1,1.3))
+
+ggsave(filename = 'figures/CountryJournal.png', plot = g, height = 2.5, width = 4, unit = 'in', dpi = 250)
+
+scrape <- scrape %>% left_join(TcYr, by = 'Year')
+
+
+ggplot() + 
+  geom_bar(data =scrape, aes(x = Year, y = ..count.., fill = Waterbody)) +
+  geom_line(data = TcYr, aes(x = Year, y = yearly.cites/13), color = 'Red') +
+  scale_fill_brewer(palette = 'Paired', labels = c('Estuaries\nand Deltas', 'Inland\nWaters','Lakes', 'Lakes and\nRivers', 'Rivers')) +
+  labs(y = 'Publication Count') +
+  scale_x_continuous(limits = c(1970, 2018), expand = c(0,0)) +
+  scale_y_continuous(limits = c(0,125), expand =c(0,0),
+                     sec.axis = sec_axis(~.*13, name  = 'Average Citation Count'),) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        axis.text.y.right = element_text(color = "red"),
+        axis.title.y.right = element_text(color = 'red', margin = margin(l = 10)),
+        legend.position = 'bottom',
+        legend.title = element_blank(),
+        legend.margin=margin(0,0,0,0),
+        legend.box.margin=margin(l = -10,r = -10,t =-10,b =20))
+
+
+trend <- TcYr %>% filter(N != 0)
+
+##Trend line
+lm <- lm(trend$N~trend$Year)
+lm2 <- lm(log(trend$N)~trend$Year)
+
+summary(lm2)
+
+trend$Diff[2:48] <- diff(trend$N)
+trend$resid <- lm2$residuals
+t1 <- trend %>% filter(Year > 2003 & Year < 2009)
+t2 <- trend %>% filter(Year > 2008 & Year < 2014)
+
+t.test(t1$resid, t2$N)
+?t.test
+
+# Proportion of conrtibution from top 10 authors
+sum(as.numeric(summ$MostProdAuthors$Articles)) #/length(M$TI)
+sum(as.numeric(summ$MostRelSources$Articles))#/length(M$TI)
+sum(as.numeric(summ$MostProdCountries$Articles))/length(M$TI)
+
 
 ```
+
+
 
 ## Word Cloud Experiment
 ```{r}
 # Load
-library("tm")
-library("SnowballC")
-library("wordcloud")
-library("RColorBrewer")
+library(tm)
+library(SnowballC)
+library(wordcloud)
+
 
 keywords <- write(scrape$Author.Keywords, 'ScopusScape/scrape.txt')
 keys <- readLines('ScopusScape/scrape.txt')
@@ -298,6 +411,9 @@ wordcloud(words = d$word, freq = d$freq, min.freq = 5,
           colors=brewer.pal(8, "Dark2"))
 ?wordcloud
 
+x = termExtraction(M, Field = 'ID')
+terms$terms <- x$ID_TM %>% str_split(., pattern = ';') %>% unlist() %>% group_by(terms) %>% summarize(count = n())
+terms = bind_cols(terms, rep(1, 51620))
 ```
 
 
@@ -306,55 +422,6 @@ wordcloud(words = d$word, freq = d$freq, min.freq = 5,
 ## Temp
 
 ```{r}
-p5 <- ggplot(munge %>%filter(!is.na(Parameter)&!is.na(Model)),
-       aes(Parameter, fill = Model)) + 
-        geom_bar() +
-        scale_fill_brewer(palette = 'Paired') +
-        theme_bw() + 
-        labs(x = 'Parameter', y = 'Count', 
-             fill = 'Modelling\nApproach') + 
-        theme(axis.text.x = element_text(angle = 90, hjust = 1),
-              legend.text=element_text(size=7))
-
-ggsave(filename='figures/ParamModelFill1.png',width=4,height=3,units='in',dpi=250)
-
-
-
-
-ggplot(munge%>% filter(!is.na(Parameter)), aes(x = Year.Bin, fill = Parameter.Grp)) + 
-  geom_bar() + 
-        scale_fill_brewer(palette = 'Paired') +
-  theme_bw() + 
-  labs(x = 'Years', y = 'Count') + 
-  theme(axis.text.x = element_text(angle = 90, hjust = 1),
-        legend.text = element_text(size=7))
-ggsave(filename='figures/timeParamFill1.png',width=4,height=3,units='in',dpi=250)
-
-
-
-ggplot(munge%>% filter(!is.na(Parameter)), aes(x = Year, fill = Parameter.Grp)) + 
-        geom_density(position = 'fill', alpha = 0.5) + 
-        scale_y_continuous(labels = percent) +
-        scale_x_continuous(breaks = pretty_breaks(n=10)) +
-        scale_fill_brewer(palette = 'Paired') +
-        theme_bw() + 
-        labs(x = 'Years', y = 'Count') + 
-        theme(axis.text.x = element_text(angle = 90, hjust = 1),
-              legend.text=element_text(size=7))
-ggsave(filename='figures/timeParamFill2.png',width=4,height=3,units='in',dpi=250)
-
-
-
-
-ggplot(munge%>% filter(!is.na(Parameter)), aes(x = Year, stat(count), fill = Parameter.Grp)) + 
-        geom_density(position = 'stack', alpha = 0.5) + 
-        scale_fill_brewer(palette = 'Paired') +
-        theme_bw() + 
-        labs(x = 'Years', y = 'Count') + 
-        theme(axis.text.x = element_text(angle = 90, hjust = 1),
-              legend.text=element_text(size=7))
-
-
 
 ```
 
@@ -369,16 +436,11 @@ library(rgdal)
 library(magrittr)
 library(viridis)
 
-check <- filt.sf <- filt %>% 
-  filter(Lat != 'Various') %>% 
-  mutate(Lat = as.numeric(levels(Lat))[Lat],
-         Long = as.numeric(levels(Long))[Long])
-
 filt.sf <- filt %>% 
-  filter(Lat != 'Various') %>% 
-  mutate(Lat = as.numeric(levels(Lat))[Lat],
-         Long = as.numeric(levels(Long))[Long]) %>%
-  na.omit() %>%
+  filter(!is.na(Lat)) %>% 
+  # mutate(Lat = as.numeric(levels(Lat))[Lat],
+  #        Long = as.numeric(levels(Long))[Long]) %>%
+  # na.omit() %>%
   st_as_sf(.,coords=c('Long','Lat'),crs=4326) %>%
   st_transform(.,54030)
 
@@ -389,8 +451,8 @@ world = st_as_sf(wrld_simpl) %>%
 
 
 ## Category Spatial
-ggplot() + geom_sf(data = world, aes(), fill = 'gray70', color = 'gray90') + 
-  geom_sf(data = filt.sf, aes(colour = Catv2), alpha =0.8) + 
+p1 <- ggplot() + geom_sf(data = world, aes(), fill = 'gray70', color = 'gray90') + 
+  geom_sf(data = filt.sf, aes(colour = Cat), alpha =0.7) + 
   coord_sf(ylim = c(-6000000, 8338578)) +
   theme_bw() +
   scale_colour_viridis_d(name = 'Paper \n Category') +
@@ -401,28 +463,28 @@ ggplot() + geom_sf(data = world, aes(), fill = 'gray70', color = 'gray90') +
         legend.position = c(0.2,0.22),
         legend.background = element_rect(fill = 'white', colour = 'gray50'))
 
-
 # Pub Data Spatial
-png(filename='figures/PubYearSpatial1.png',width=8,height=6,units='in',res=250)
-ggplot() + geom_sf(data = world, aes(), fill = 'gray70', color = 'gray90') + 
-  geom_sf(data = filt.sf, aes(colour = Year), alpha =0.9) + 
+
+p1<- ggplot() + geom_sf(data = world, aes(), fill = 'gray70', color = 'gray90') + 
+  geom_sf(data = filt.sf, aes(colour = Year),size = 0.5, alpha =0.9) + 
   coord_sf(ylim = c(-6000000, 8338578)) +
   theme_bw() +
-  scale_colour_viridis(name = 'Publication Year') +
+  scale_colour_viridis_c(name = 'Publication Year') +
   theme(axis.text.x = element_blank(),
         axis.text.y = element_blank(),
         axis.ticks = element_blank(),
         rect = element_blank(),
         panel.grid.major = element_line(color = 'grey70'),
-        legend.position = c(0.2,0.22),
-        legend.background = element_rect(fill = 'white', colour = 'gray50'))
-dev.off()
+        legend.text=element_text(size=7),
+              axis.title = element_blank(),
+              legend.position = 'bottom',
+              legend.title=element_text(size=9),
+              legend.key.size = unit(0.5,'cm'))
 
 
-# Timespan Spatial
-png(filename='figures/TimeSpatial1.png',width=8,height=6,units='in',res=250)
-ggplot() + geom_sf(data = world, aes(), fill = 'gray70', color = 'gray90') + 
-  geom_sf(data = filt.sf, aes(colour = Time.Bin), alpha =0.9) + 
+#Timespan
+p2<- ggplot() + geom_sf(data = world, aes(), fill = 'gray70', color = 'gray90') + 
+  geom_sf(data = filt.sf, aes(colour = Time.Bin),size = 0.5, alpha =0.9) + 
   coord_sf(ylim = c(-6000000, 8338578)) +
   theme_bw() +
   scale_colour_viridis_d(name = 'Time Span') +
@@ -431,25 +493,34 @@ ggplot() + geom_sf(data = world, aes(), fill = 'gray70', color = 'gray90') +
         axis.ticks = element_blank(),
         rect = element_blank(),
         panel.grid.major = element_line(color = 'grey70'),
-        legend.position = c(0.2,0.22),
-        legend.background = element_rect(fill = 'white', colour = 'gray50'))
-dev.off()
+        legend.text=element_text(size=7),
+              axis.title = element_blank(),
+              legend.position = 'bottom',
+              legend.title=element_text(size=9),
+              legend.key.size = unit(0.5,'cm'))
+
 
 #Mag Spatial
-png(filename='figures/MagSpatial1.png',width=8,height=6,units='in',res=250)
-ggplot() + geom_sf(data = world, aes(), fill = 'gray70', color = 'gray90') + 
-  geom_sf(data = filt.sf %>% filter(Coverage.KM != 'unknown'), aes(colour = Coverage.KM), alpha =0.9) +
+p3 <-ggplot() + geom_sf(data = world, aes(), fill = 'gray70', color = 'gray90') + 
+  geom_sf(data = filt.sf %>% filter(Coverage.KM != 'unknown'), aes(colour = Coverage.KM),size = .5, alpha =0.9) +
   coord_sf(ylim = c(-6000000, 8338578)) +
   theme_bw() +
-  scale_colour_viridis_d(name = 'Coverage (Order\nof Magnitude)') +
+  scale_colour_viridis_d(name = expression(paste('Coverage Scale (km'^'2',')'))) +
   theme(axis.text.x = element_blank(),
         axis.text.y = element_blank(),
         axis.ticks = element_blank(),
         rect = element_blank(),
         panel.grid.major = element_line(color = 'grey70'),
-        legend.position = c(0.2,0.22),
-        legend.background = element_rect(fill = 'white', colour = 'gray50'))
-dev.off()
+        legend.text=element_text(size=7),
+              axis.title = element_blank(),
+              legend.position = 'bottom',
+              legend.title=element_text(size=9),
+              legend.key.size = unit(0.5,'cm'))
+
+g <- grid.arrange(p1,p2,p3, nrow = 3)
+
+ggsave(filename='figures/Spatial.png',plot = g, width=4,height=7, units='in', dpi=250)
+
 
 
 
@@ -468,26 +539,6 @@ ggplot(df, aes(x = Catv2, y = fig.count/fig.total)) + geom_violin(aes(colour = f
 ggplot(df, aes(x = Catv2, y = fig.count/fig.total)) + geom_boxplot(aes(colour = fig.type)) + labs(x = 'Paper Category', y = 'Figure Proportion', colour = 'Figure Type')
 
 ggplot(df, aes(x = Catv2, y = fig.count/fig.total)) + geom_col(aes(colour = fig.type)) + theme_bw()
-
-
-```
-
-```{r}
-dsamp <- diamonds[sample(nrow(diamonds), 1000), ] 
-
-p1 <- qplot(carat, price, data=dsamp, colour=clarity)
-p2 <- qplot(carat, price, data=dsamp, colour=clarity, geom="path")
-
-leg <- ggplotGrob(p1)
-
-legend=gTree(children=gList(leg), cl="legendGrob")
-widthDetails.legendGrob <- function(x) unit(2, "cm")
-
-grid.arrange(grobs = list(p1 + theme(legend.position="none"),
-p2 + theme(legend.position="none")),
-legend=legend,
-main ="this is a title",
-left = "This is my global Y-axis title")
 
 
 ```

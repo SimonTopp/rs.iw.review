@@ -46,15 +46,16 @@ Running Questions for Matt
 ## Munging
 
 ## Download latest version
-drive_download(as_id('https://docs.google.com/spreadsheets/d/1fHsqm74c2sp2LyZjredmHMLvS08nlfHZTxf49eNon4Y/edit?usp=sharing'), path = 'wqIndex.csv', overwrite = T)
+drive_download(as_id('https://docs.google.com/spreadsheets/d/1fHsqm74c2sp2LyZjredmHMLvS08nlfHZTxf49eNon4Y/edit?usp=sharing'), path = 'wqIndex20180807.csv', overwrite = T)
+
 
 ##Rename all the columns
-index <- read.csv('wqIndex.csv', na.string = c('','na')) %>% 
-  select(ID = Paper.ID, Author, Journal, Year, DOI, Location, Lat, Long, Coverage.KM = Study.Scale..sq.km., Years = Timescale..in.years., Sensor = Sensor.s., Sensor.Type,  Atm.Comp = Atm..Comparison, Best.AC = Best.A..Correction, Parameter = Constituent, Landscape.var = Landscape.Variables.in.final.model, Num.Models = Number.of.models.used, Model.Comparison = Modelling.Approach.Comparison, Model = Chosen.Model.Approach, EF = Error..fit., EF.metric = Error.metric..fit., EV = Error..validation., EV.metric = Error.Metric..validation., Figs.m = Methodology.Figs.Tables, Figs.v = Validation.Figs.Tables, Figs.t = Applied.Figures, Cat = Category, Rating = Category.Rating..1.10.)
+index <- read.csv('wqIndex20180807.csv', na.string = c('','na')) %>% 
+  select(ID = Paper.ID, Author, Journal, Year, DOI, Location, Lat, Long, Coverage.KM = Study.Scale..sq.km., Years = Timescale..in.years., Waterbody, Sensor = Sensor.s., Sensor.Type,  Atm.Comp = Atm..Comparison, Best.AC = Best.A..Correction, Parameter = Constituent, Landscape.var = Landscape.Variables.in.final.model, Num.Models = Number.of.models.used, Model.Comparison = Modelling.Approach.Comparison, Model = Chosen.Model.Approach, EF = Error..fit., EF.metric = Error.metric..fit., EV = Error..validation., EV.metric = Error.Metric..validation., Figs.m = Methodology.Figs.Tables, Figs.v = Validation.Figs.Tables, Figs.t = Applied.Figures, Cat = Category, Rating = Category.Rating..1.10.)
   
 ##Change this later, for now keep originally listed params
 index.munge <- index %>% 
-  mutate(Cat = if_else(Rating < 5, 'Methods', ifelse(Rating > 7, 'Causal','Trends')),
+  mutate(Cat = if_else(Rating < 4, 'Methods', ifelse(Rating == 4, 'Methods w/ Pattern App', ifelse(Rating > 7, 'Applied','Trends/Patterns'))),
          Year.Bin = paste0(trunc(Year/5) * 5,'-', trunc(Year/5) * 5 + 5),
          Time.Bin= cut(Years, breaks = c(-Inf, 1/365, 1/12, 1, 5, 10, Inf),
                         labels = c('Snapshot', '< 1 Month', '< 1 Year', '1-5 Years', '5-10 Years','>10 Years')))
@@ -63,7 +64,7 @@ index.munge <- index %>%
 
 #### Filtered List
 index.filt <- index.munge %>%
-  select(-c(Parameter, Landscape.var, Num.Models, Model.Comparison, Best.AC, EF,EF.metric,EV,EV.metric,Parameter, Atm.Comp, Sensor, Sensor.Type)) %>%
+  select(-c(Parameter, Landscape.var, Num.Models, Model.Comparison, Best.AC, EF,EF.metric,EV,EV.metric,Parameter, Atm.Comp, Sensor.Type, Sensor)) %>%
   distinct(ID, .keep_all = T)
 
 ```
@@ -77,18 +78,18 @@ unique(index.munge$Parameter)[order(unique(index.munge$Parameter))]
 ##Amalgamate as necessary
 terms <- list(
 Sediments.Other = c('^OSS|^VSS|^NVSS|^NPSS$|tripton|Tripton|^ISS'),
-Cyanobacteria = c('^BG|^phycocyanin|^cy$|^CY$|^PC$|cyanobacteria'),
+Cyanobacteria = c('^BG|^phycocyanin|^cy$|^CY$|^PC$|cyanobacteria|^C-PC$'),
 Chl = c('CHL|chl-a|Chl-a|Chl-b|Chl-c|Green algae|Green Biovolume|Algal Blooms|Algae|^chlorophyll$'),
 Carbon.Other = c('^TOC|^COD|^BOD|^DIC|^NPOC|^pCO2|^TIC'),
 Chromaticity = c('chromaticity|Color'),
 Trophic = c('^TSI'),
-Clarity = c('SDD|^SD|Secchi|Kd\\(PAR\\)|Kd\\(490\\)'),
+Clarity = c('SDD|^SD|Secchi|Kd\\(PAR\\)|Kd\\(490\\)|^Kpar$'),
 Turbidity = c('turb|Turb|Turbidity|TURB'),
 Nutrients = c('^TN|NH3-N|NO3-N|^TP|^DP'),
 Metals = c('^Pb|^As|^Zn|Total heavy metals'),
 Other = c('^pH|Diatom|water type|class|^DO$|Conductivity|Depth|^CYS$|^TDS'),
 TSS = c('^DW$|^SDW|^SPM|^SS$|^SSC|^SM$|^TSM|^Seston$'),
-DOC = c('^CDOM$')
+CDOM = c('^CDOM$')
 )
   
 ##Replace terms
@@ -118,6 +119,33 @@ index.munge <- index.munge %>% mutate(Parameter.Grp = ifelse(grepl(pattern = ter
 unique(index.munge$Parameter.Grp)[order(unique(index.munge$Parameter.Grp))]
 ```
 
+
+### Clean the waterbodies
+
+```{r}
+### Look at the unique values in order
+unique(index.munge$Waterbody)[order(unique(index.munge$Waterbody))]
+
+##Amalgamate as necessary
+terms <- list(
+Lakes = c('^Lake$|^Reservoirs$|^Reservoir$'),
+Rivers = c('^River$|^Stream$'),
+Deltas = '^Delta$',
+Estuaries = c('^Estuary$|^Coast$|^Sea$|^Lagoon'),
+Multiple = c('^Lakes,\\sCoastal\\sWaters$|^Lakes,\\sestuaries$|^Lakes, Rivers$|^Lakes,\\sRivers,\\sEsturaries$|^River,\\sDelta$|^River, Estuary$|^River, Wetlands$')
+)
+  
+##Replace terms
+for (i in 1:length(terms)) {
+index.munge <- index.munge %>% mutate(Waterbody = ifelse(grepl(pattern = terms[[i]], Waterbody), names(terms[i]), as.character(Waterbody)))
+}
+  
+##Check the work
+unique(index.munge$Waterbody)[order(unique(index.munge$Waterbody))]
+```
+
+
+
 # Clean the Modelling Approaches 
 
 ```{r}
@@ -128,7 +156,7 @@ unique(index.munge$Model)[order(unique(index.munge$Model))]
 
 ##Amalgamate as necessary
 terms <- list(
-Semi.Analytical = c('^Analytic$|^Analytical$|^Semi-Analytic$|^Semi-analytical$|^semi-analytical$|^Semi.Analytic$|^chromaticity$|^analytical$|^Semi-analytical - QAA$|^semi-analytical \\(spectral shape\\)$|^semi-analytical \\(Matrix Inversion\\)$|^IOP$'),
+Semi.Analytical = c('^Analytic$|^Analytical$|^Semi-Analytic$|^Semi-analytical$|^semi-analytical$|^Semi.Analytic$|^chromaticity$|^analytical$|^Semi-analytical - QAA$|^semi-analytical \\(spectral shape\\)$|^semi-analytical \\(Matrix Inversion\\)$|^IOP$|^Semi-Analytical$|^Spectral Mixture Analysis$'),
 Machine.Learning = c('^ANN - NARXNET$|^ANN$|^EOF$|^RF$|^GP$|^GA-BP-NN$|^Symbolic regression$|^LUT\\(ML\\)$|^HCA$'),
 Mixed = c('^mixed$|^Empirical, Semi-analytic$'),
 Product = c('^product$|SeaDas'),
@@ -170,6 +198,24 @@ index.munge <- index.munge %>% mutate(Sensor.Type = ifelse(grepl(pattern = terms
 unique(index.munge$Sensor.Type)[order(unique(index.munge$Sensor.Type))]
   
 ```
+
+
+#Sensor Cleaning
+
+```{r}
+####################### Sensor Cleaning
+### Look at the unique values in order
+unique(index.munge$Sensor)[order(unique(index.munge$Sensor))]
+  
+index.munge$Sensor= index.munge$Sensor %>% 
+  gsub(x = .,pattern = '(L)([0-9])', replacement = 'Landsat \\2') %>%
+  gsub(x = ., pattern = '(S)([0-9])', replacement = 'Sentinel \\2')
+  
+##Check the work
+unique(index.munge$Sensor)[order(unique(index.munge$Sensor))]
+  
+```
+
 
 #Clean the Journals (Not sure about this one, but go over with Matt to look for obvious errors.)
 
@@ -243,7 +289,7 @@ unique(index.munge$Best.AC)[order(unique(index.munge$Best.AC))]
 ```
 
 
-# Atmospheric Comparison Cleaning
+# Landscape Variables Comparison Cleaning
 
 ```{r}
 ####################### Landscape Variables Cleaning 
@@ -268,7 +314,6 @@ unique(index.munge$Landscape.var)[order(unique(index.munge$Landscape.var))]
 ```
 
 # Number of Models Cleaning
-
 
 ```{r}
 ####################### Location Cleaning 
@@ -300,7 +345,7 @@ unique(index.munge$Location)[order(unique(index.munge$Location))]
 ggplot(index.munge %>% distinct(ID, .keep_all = T)) + geom_histogram(aes(x = Location), stat = 'count') + theme(axis.text.x = element_text(angle = 90, hjust = 1))
 ```
 
-
+# Join with dois from SCOPUS for cite counts
 
 ```{r}
 # Split DOI and join with scrape citation counts
@@ -319,13 +364,19 @@ for (i in 1:length(index.munge$DOI)){
 # 
 # query <- searchByID(theIDs = 'dois.txt', idtype = 'doi', content = 'standard', outfile = 'dois.xml')
 # 
-# doisR <- extractXML('dois.xml') %>% 
-#   select(doi, Title = articletitle, Journal = journal, Cite.Count = timescited)
+doisR <- extractXML('dois.xml') %>% 
+   select(doi, Title = articletitle, Cite.Count = timescited)
+
+
 
 index.munge <- index.munge %>%
   left_join(doisR, by = c('DOI.Short' = 'doi'))
 
-
+# ##Pull out notes for causal table
+# notes <- check %>% select(Paper.ID, Notes, Constituent) %>% distinct(Paper.ID, .keep_all = T) %>%
+#   right_join(filt, by =  c('Paper.ID' = 'ID'))
+# 
+# write.csv(notes, 'filtExport.csv')
 ```
 
 # Split Error Metric Columns
@@ -342,19 +393,17 @@ index.munge <- index.munge %>%
   bind_cols(Error.munge) %>%
   select(-c(EF, EF.metric, EV, EV.metric))
 
-check <- index.munge %>%
-  select(Journal.x, Journal.y, Author, ID)
 ```
 
 
 ```{r}
 #New clean(er) outfacing data-set
 
-out <- index.munge %>%
-  select(ID, Author, Journal.x, Title, Year, DOI, Location:Sensor.Type, Atm.Correction = Best.AC, Parameter, Landscape.Variables = Landscape.var, Num.Models:Time.Bin, Error.fit1:Val.metric3, Cite.Count )
-
-
-write.csv(out, 'IndexMungedv1.csv')
+# out <- index.munge %>%
+#   select(ID, Author, Journal, Title, Year, DOI, Location:Sensor.Type, Atm.Correction = Best.AC, Parameter, Landscape.Variables = Landscape.var, Num.Models:Time.Bin, Error.fit1:Val.metric3, Cite.Count )
+# 
+# 
+# write.csv(out, 'IndexMungedv2.csv')
 
 ```
 

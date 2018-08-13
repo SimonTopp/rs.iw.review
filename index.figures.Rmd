@@ -16,14 +16,16 @@ library(tidyverse)
 library(gridExtra)
 library(grid)
 library(lattice)
-
+library(viridis)
+library(knitr)
+library(kableExtra)
 ```
 
 # Make some Figures!
 
 
 ```{r}
-munge <- index.munge %>%   filter(!is.na(Figs.m),
+munge <- index.munge %>%  filter(!is.na(Figs.m),
                                   !is.na(Model))
 
 #### Create Filtered List with  entry per paper for certain figures
@@ -733,89 +735,165 @@ papes.sum <- filt %>%
 
 
 ```{r}
-##Error metric figure playing
-grepl(x = index$EF.metric, pattern = 'rmse',  ignore.case = T)
-
 ## Super annoying way to make long error data frame
 ef <- index.munge %>%
   mutate(model.id = row_number()) %>%
-  select(ID, model.id,Year, Parameter, Parameter.Grp, Error.fit1:Error.fit4) %>%
-  gather(Error.fit1:Error.fit4, key = fit.num, value = Error.fit)
-ef$fit[ef$fit.num == 'Error.fit1'] <- 1
-ef$fit[ef$fit.num == 'Error.fit2'] <- 2
-ef$fit[ef$fit.num == 'Error.fit3'] <- 3
-ef$fit[ef$fit.num == 'Error.fit4'] <- 4
+  select(ID, model.id,Year,Year.Bin, Parameter, Parameter.Grp, Error.fit1:Error.fit4) %>%
+  gather(Error.fit1:Error.fit4, key = metric.num, value = Error) %>%
+  mutate(type = 'Fit')
+ef$fit[ef$metric.num == 'Error.fit1'] <- 1
+ef$fit[ef$metric.num == 'Error.fit2'] <- 2
+ef$fit[ef$metric.num == 'Error.fit3'] <- 3
+ef$fit[ef$metric.num == 'Error.fit4'] <- 4
 ef <- ef %>% mutate(UniqueID = paste0(model.id,'.', fit))
  
 efm <- index.munge %>%
-  mutate(model.id = row_number()) %>%
-  select(ID, model.id,Year, Parameter, Parameter.Grp, Fit.metric1:Fit.metric4) %>%
-  gather(Fit.metric1:Fit.metric4, key = fit.num, value = Fit.metric)
-efm$fit.metric[efm$fit.num == 'Fit.metric1'] <- 1
-efm$fit.metric[efm$fit.num == 'Fit.metric2'] <- 2
-efm$fit.metric[efm$fit.num == 'Fit.metric3'] <- 3
-efm$fit.metric[efm$fit.num == 'Fit.metric4'] <- 4
-efm <- efm %>% mutate(UniqueID = paste0(model.id, '.',fit.metric)) 
+  mutate(model.id = row_number(),
+         type = 'Fit') %>%
+  select(ID, model.id, type, Year, Parameter, Parameter.Grp, Fit.metric1:Fit.metric4) %>%
+  gather(Fit.metric1:Fit.metric4, key = metric.num, value = Metric)
+efm$fit[efm$metric.num == 'Fit.metric1'] <- 1
+efm$fit[efm$metric.num == 'Fit.metric2'] <- 2
+efm$fit[efm$metric.num == 'Fit.metric3'] <- 3
+efm$fit[efm$metric.num == 'Fit.metric4'] <- 4
+efm <- efm %>% mutate(UniqueID = paste0(model.id, '.',fit)) 
 
-error.fit <- left_join(ef, efm %>% select(Fit.metric, UniqueID), by = 'UniqueID')
+error.fit <- left_join(ef, efm %>% select(Metric, UniqueID), by = 'UniqueID')
 
 ev <- index.munge %>%
-  mutate(model.id = row_number()) %>%
-  select(ID, model.id,Year, Parameter, Parameter.Grp, Error.val1:Error.val4) %>%
-  gather(Error.val1:Error.val4, key = val.num, value = Error.val)
-ev$val[ev$val.num == 'Error.val1'] <- 1
-ev$val[ev$val.num == 'Error.val2'] <- 2
-ev$val[ev$val.num == 'Error.val3'] <- 3
-ev$val[ev$val.num == 'Error.val4'] <- 4
-ev <- ev %>% mutate(UniqueID = paste0(model.id,'.', val))
+  mutate(model.id = row_number(),
+         type = 'Val') %>%
+  select(ID, model.id,type, Year, Year.Bin, Parameter, Parameter.Grp, Error.val1:Error.val4) %>%
+  gather(Error.val1:Error.val4, key = metric.num, value = Error)
+ev$fit[ev$metric.num == 'Error.val1'] <- 1
+ev$fit[ev$metric.num == 'Error.val2'] <- 2
+ev$fit[ev$metric.num == 'Error.val3'] <- 3
+ev$fit[ev$metric.num == 'Error.val4'] <- 4
+ev <- ev %>% mutate(UniqueID = paste0(model.id,'.', fit))
  
 evm <- index.munge %>%
-  mutate(model.id = row_number()) %>%
-  select(ID, model.id,Year, Parameter, Parameter.Grp, Val.metric1:Val.metric4) %>%
-  gather(Val.metric1:Val.metric4, key = val.num, value = Val.metric)
-evm$val.metric[evm$val.num == 'Val.metric1'] <- 1
-evm$val.metric[evm$val.num == 'Val.metric2'] <- 2
-evm$val.metric[evm$val.num == 'Val.metric3'] <- 3
-evm$val.metric[evm$val.num == 'Val.metric4'] <- 4
-evm <- evm %>% mutate(UniqueID = paste0(model.id, '.',val.metric)) 
+  mutate(model.id = row_number(),
+         type = 'Val') %>%
+  select(ID, model.id,Year,type, Parameter, Parameter.Grp, Val.metric1:Val.metric4) %>%
+  gather(Val.metric1:Val.metric4, key = val.num, value = Metric)
+evm$fit[evm$val.num == 'Val.metric1'] <- 1
+evm$fit[evm$val.num == 'Val.metric2'] <- 2
+evm$fit[evm$val.num == 'Val.metric3'] <- 3
+evm$fit[evm$val.num == 'Val.metric4'] <- 4
+evm <- evm %>% mutate(UniqueID = paste0(model.id, '.',fit)) 
 
-error.val <- left_join(ev, evm %>% select(Val.metric, UniqueID), by = 'UniqueID')
+error.val <- left_join(ev, evm %>% select(Metric, UniqueID), by = 'UniqueID')
 
-error.long <- error.val %>% left_join(error.fit) %>%
-  mutate(Fit.metric = trimws(Fit.metric),
-         Val.metric = trimws(Val.metric)) #%>%
-  gather(Error.fit, Error.val, key = 'Type', value = 'Error' ) %>%
-  select(ID, model.id, Parameter, Parameter.Grp, val, Type, Error)
+error.long <- bind_rows(error.fit,error.val) %>%
+  mutate(Metric = trimws(Metric)) %>%
+  select(-metric.num)
 
-error.long$Fit.metric[error.long$Fit.metric == ''] = 'none'
-error.long$Val.metric[error.long$Val.metric == ''] = 'none'
+error.long$Metric[error.long$Metric == ''] = 'none'
+error.long$Error[error.long$Error == ''] = 'none'
 
 
 ## Do some munging
 ### Look at the unique values in order
-unique(error.long$Fit.metric)[order(unique(error.long$Fit.metric))]
 
-##Amalgamate as necessary
-terms <- list(
-)
-  
-##Replace terms
-for (i in 1:length(terms)) {
-error.long <- error.long %>% mutate(Fit.metric = ifelse(grepl(pattern = terms[[i]], Fit.metric), names(terms[i]), as.character(Fit.metric)))
-}
-  
-##Check the work
-unique(error.long$Fit.metric)[order(unique(error.long$Fit.metric))]
+unique(error.long$Metric)[order(unique(error.long$Metric))]
 
 
 
 ### R2 Values
-r <- error.long %>% filter(Fit.metric == 'R2')%>%
-  mutate(Error.fit = as.numeric(Error.fit)) %>%
-  na.omit() %>%
-  filter(Error.fit > 0.1)
+r <- error.long %>% filter(Metric == 'R2')%>%
+  mutate(Error = as.numeric(Error)) %>%
+  na.omit() %>% filter(Error < 1) #%>% ##Get rid of this later,removes 3 data entry errors.
+  group_by(Year.Bin, type) %>%
+  summarise(mean = mean(Error),
+            sd = sd(Error),
+            count = n())
 
-ggplot(r, aes(x = Year, y = Error, color = Type))+ geom_smooth()
+ggplot(r, aes(x = Year.Bin, y = mean, color = type, group = type)) + geom_point() +
+  geom_errorbar(aes(ymin=mean-sd, ymax=mean+sd), width=.2)
+
+ggplot(r,aes(x = Year, y = Error, color = type)) + geom_point(size = .9) + 
+  geom_smooth(se = F, size = .7) + 
+  scale_color_discrete(name = 'Error\nType', breaks = c('Fit', 'Val'), labels = c('Fit', 'Validation')) +
+  scale_x_continuous(breaks = pretty_breaks(n = 10)) +
+  labs(y = expression(paste('Coefficient of Determination (R'^2,')'))) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+  theme_bw()
+
+ggsave('figures/R2.png', width = 4, height = 3.5, units = 'in')
+
+##Metric Counts
+#see the various reported metrics
+unique(error.long$Metric)[order(unique(error.long$Metric))]
+
+# Fit counts
+r.f = length(grep(x = error.fit$Metric, pattern = 'r2', ignore.case = T))
+rmse.f = length(grep(x = error.fit$Metric, pattern = c('rmse|nrms|rmsd'), ignore.case = T))
+se.f = length(grep(x = error.fit$Metric, pattern =
+                     c('^se$|^mse$|^nse$|^sdv$|^see$'), ignore.case = T))
+re.f = length(grep(x = error.fit$Metric, pattern =
+                     c('^\\%|^sre$|^rpd$|^sdv$|^see$|^re|Relative|$mre|mrad|^mpe|lre|^average'), ignore.case = T))
+
+mae.f = length(grep(x = error.fit$Metric, pattern =
+                     c('mare|mape|^mae|^madp'), ignore.case = T))
+bias.f = length(grep(x = error.fit$Metric, pattern =
+                     c('bias|mnb'), ignore.case = T))
+
+#Val Counts
+r.v = length(grep(x = error.val$Metric, pattern = 'r2', ignore.case = T))
+rmse.v = length(grep(x = error.val$Metric, pattern = c('rmse|nrms|rmsd'), ignore.case = T))
+se.v = length(grep(x = error.val$Metric, pattern =
+                     c('^se$|^mse$|^nse$|^sdv$|^see$'), ignore.case = T))
+re.v = length(grep(x = error.val$Metric, pattern =
+                     c('^\\%|^sre$|^rpd$|^sdv$|^see$|^re|Relative|$mre|mrad|^mpe|lre|^average'), ignore.case = T))
+
+mae.v = length(grep(x = error.val$Metric, pattern =
+                     c('mare|mape|^mae|^madp'), ignore.case = T))
+bias.v = length(grep(x = error.val$Metric, pattern =
+                     c('bias|mnb'), ignore.case = T))
+
+counts <- data.frame('Metric' = c(rep(c('R2', 'RMSE', 'Standard Error', 'Relative Error', 'Mean Absolute Error', 'Bias'),2)), 
+                     'Count' = 
+                       c(r.f,rmse.f, se.f, re.f, mae.f, bias.f, r.v, rmse.v, se.v, re.v, mae.v, bias.v),
+                     'type' = c(rep('Fit',6),rep('Val',6)))
+
+
+ggplot(counts, aes(x = Metric, y = Count, fill = type)) + geom_col(position = 'dodge') +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+## Collapse terms list to send to Matt
+rmse.t = error.long$Metric[grep(x = error.long$Metric, pattern = c('rmse|nrms|rmsd'), ignore.case = T)] %>%
+  unique()
+se.t = error.long$Metric[grep(x = error.long$Metric,  pattern =
+c('^se$|^mse$|^nse$|^sdv$|^see$'), ignore.case = T)] %>%
+  unique()
+re.t = error.long$Metric[grep(x = error.long$Metric, pattern = c('^\\%|^sre$|^rpd$|^sdv$|^see$|^re|Relative|$mre|mrad|^mpe|lre|^average'), ignore.case = T)] %>%
+  unique()
+mae.t = error.long$Metric[grep(x = error.long$Metric, pattern = c('mare|mape|^mae|^madp'), ignore.case = T)] %>%
+  unique()
+bias.t = error.long$Metric[grep(x = error.long$Metric, pattern = c('bias|mnb'), ignore.case = T)] %>%
+  unique()
+
+error.metrics <- data.frame('Metric' = c('RMSE', 'Standard Error', 'Relative error', 'MAE', 'BIAS'), 'Terms' = c(paste0(rmse.t, collapse = ', '), paste0(se.t, collapse = ', '), paste0(re.t, collapse = ', '), paste0(mae.t, collapse = ', '), paste0(bias.t, collapse = ', ')))
+
+kable(error.metrics) %>%
+  kable_styling()
+
+
+##Total counts
+ef <- error.long %>% 
+  filter(Error != 'none',
+         Error != '') %>%
+  group_by(fit, type) %>%
+  summarize(count = n(),
+            percent = n()/length(unique(error.long$model.id)))
+
+r
+
+
+##Metric Counts
+#see the various reported metrics
+unique(error.val$Metric %>% trimws())[order(unique(error.val$Metric %>% trimws()))]
+
 ```
 
 ## Temp

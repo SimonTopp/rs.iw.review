@@ -46,11 +46,11 @@ Running Questions for Matt
 ## Munging
 
 ## Download latest version
-drive_download(as_id('https://docs.google.com/spreadsheets/d/1fHsqm74c2sp2LyZjredmHMLvS08nlfHZTxf49eNon4Y/edit?usp=sharing'), path = 'wqIndex20180807.csv', overwrite = T)
+drive_download(as_id('https://docs.google.com/spreadsheets/d/1fHsqm74c2sp2LyZjredmHMLvS08nlfHZTxf49eNon4Y/edit?usp=sharing'), path = 'wqIndex20180813.csv', overwrite = T)
 
 
 ##Rename all the columns
-index <- read.csv('wqIndex20180807.csv', na.string = c('','na')) %>% 
+index <- read.csv('wqIndex20180813.csv', na.string = c('','na')) %>% 
   select(ID = Paper.ID, Author, Journal, Year, DOI, Location, Lat, Long, Coverage.KM = Study.Scale..sq.km., Years = Timescale..in.years., Waterbody, Sensor = Sensor.s., Sensor.Type,  Atm.Comp = Atm..Comparison, Best.AC = Best.A..Correction, Parameter = Constituent, Landscape.var = Landscape.Variables.in.final.model, Num.Models = Number.of.models.used, Model.Comparison = Modelling.Approach.Comparison, Model = Chosen.Model.Approach, EF = Error..fit., EF.metric = Error.metric..fit., EV = Error..validation., EV.metric = Error.Metric..validation., Figs.m = Methodology.Figs.Tables, Figs.v = Validation.Figs.Tables, Figs.t = Applied.Figures, Cat = Category, Rating = Category.Rating..1.10.)
   
 ##Change this later, for now keep originally listed params
@@ -382,12 +382,12 @@ index.munge <- index.munge %>%
 # Split Error Metric Columns
 ```{r}
 
-Error.munge<- str_split_fixed(index.munge$EF, pattern = ',', n = 3) %>%
-  cbind(str_split_fixed(index.munge$EF.metric, pattern = ',', n = 3)) %>%
-  cbind(str_split_fixed(index.munge$EV, pattern = ',', n = 3)) %>%
-  cbind(str_split_fixed(index.munge$EV.metric, pattern = ',', n = 3)) %>%
+Error.munge<- str_split_fixed(index.munge$EF, pattern = ',', n = 4) %>%
+  cbind(str_split_fixed(index.munge$EF.metric, pattern = ',', n = 4)) %>%
+  cbind(str_split_fixed(index.munge$EV, pattern = ',', n = 4)) %>%
+  cbind(str_split_fixed(index.munge$EV.metric, pattern = ',', n = 4)) %>%
   as.tibble() %>%
-  rename(Error.fit1 = V1, Error.fit2 = V2, Error.fit3 = V3, Fit.metric1 =V4, Fit.metric2 = V5, Fit.metric3 = V6, Error.val1 = V7, Error.val2 = V8, Error.val3 = V9, Val.metric1 = V10, Val.metric2 = V11, Val.metric3 =V12)
+  rename(Error.fit1 = V1, Error.fit2 = V2, Error.fit3 = V3, Error.fit4 = V4, Fit.metric1 =V5, Fit.metric2 = V6, Fit.metric3 = V7, Fit.metric4 = V8, Error.val1 = V9, Error.val2 = V10, Error.val3 = V11, Error.val4 = V12, Val.metric1 = V13, Val.metric2 = V14, Val.metric3 =V15, Val.metric4 =V16)
 
 index.munge <- index.munge %>%
   bind_cols(Error.munge) %>%

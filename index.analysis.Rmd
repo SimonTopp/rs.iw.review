@@ -46,17 +46,17 @@ Running Questions for Matt
 ## Munging
 
 ## Download latest version
-drive_download(as_id('https://docs.google.com/spreadsheets/d/1fHsqm74c2sp2LyZjredmHMLvS08nlfHZTxf49eNon4Y/edit?usp=sharing'), path = 'wqIndex20180813.csv', overwrite = T)
+drive_download(as_id('https://docs.google.com/spreadsheets/d/1fHsqm74c2sp2LyZjredmHMLvS08nlfHZTxf49eNon4Y/edit?usp=sharing'), path = 'wqIndex20180830.csv', overwrite = T)
 
 
 ##Rename all the columns
-index <- read.csv('wqIndex20180813.csv', na.string = c('','na')) %>% 
+index <- read.csv('wqIndex20180830.csv', na.string = c('','na')) %>% 
   select(ID = Paper.ID, Author, Journal, Year, DOI, Location, Lat, Long, Coverage.KM = Study.Scale..sq.km., Years = Timescale..in.years., Waterbody, Sensor = Sensor.s., Sensor.Type,  Atm.Comp = Atm..Comparison, Best.AC = Best.A..Correction, Parameter = Constituent, Landscape.var = Landscape.Variables.in.final.model, Num.Models = Number.of.models.used, Model.Comparison = Modelling.Approach.Comparison, Model = Chosen.Model.Approach, EF = Error..fit., EF.metric = Error.metric..fit., EV = Error..validation., EV.metric = Error.Metric..validation., Figs.m = Methodology.Figs.Tables, Figs.v = Validation.Figs.Tables, Figs.t = Applied.Figures, Cat = Category, Rating = Category.Rating..1.10.)
   
 ##Change this later, for now keep originally listed params
 index.munge <- index %>% 
   mutate(Cat = if_else(Rating < 4, 'Methods', ifelse(Rating == 4, 'Methods w/ Pattern App', ifelse(Rating > 7, 'Applied','Trends/Patterns'))),
-         Year.Bin = paste0(trunc(Year/5) * 5,'-', trunc(Year/5) * 5 + 5),
+         Year.Bin = paste0(trunc(Year/5) * 5,'-', trunc(Year/5) * 5 + 4),
          Time.Bin= cut(Years, breaks = c(-Inf, 1/365, 1/12, 1, 5, 10, Inf),
                         labels = c('Snapshot', '< 1 Month', '< 1 Year', '1-5 Years', '5-10 Years','>10 Years')))
 
@@ -87,9 +87,9 @@ Clarity = c('SDD|^SD|Secchi|Kd\\(PAR\\)|Kd\\(490\\)|^Kpar$'),
 Turbidity = c('turb|Turb|Turbidity|TURB'),
 Nutrients = c('^TN|NH3-N|NO3-N|^TP|^DP'),
 Metals = c('^Pb|^As|^Zn|Total heavy metals'),
-Other = c('^pH|Diatom|water type|class|^DO$|Conductivity|Depth|^CYS$|^TDS'),
+Other = c('^pH|Diatom|water type|class|^DO$|Conductivity|Depth|^CYS$|^TDS$|^Acidic water$|^Salinity'),
 TSS = c('^DW$|^SDW|^SPM|^SS$|^SSC|^SM$|^TSM|^Seston$'),
-CDOM = c('^CDOM$')
+CDOM = c('^CDOM$|^DOC$')
 )
   
 ##Replace terms
@@ -132,7 +132,7 @@ Lakes = c('^Lake$|^Reservoirs$|^Reservoir$'),
 Rivers = c('^River$|^Stream$'),
 Deltas = '^Delta$',
 Estuaries = c('^Estuary$|^Coast$|^Sea$|^Lagoon'),
-Multiple = c('^Lakes,\\sCoastal\\sWaters$|^Lakes,\\sestuaries$|^Lakes, Rivers$|^Lakes,\\sRivers,\\sEsturaries$|^River,\\sDelta$|^River, Estuary$|^River, Wetlands$')
+Multiple = c('^Lakes,\\sCoastal\\sWaters$|^Lakes,\\sestuaries$|^Lakes, Rivers$|^Lakes,\\sRivers,\\sEsturaries$|^River,\\sDelta$|^River, Estuary$|^River, Wetlands$|^River/Estuary$|^River/Delta$')
 )
   
 ##Replace terms
@@ -220,22 +220,22 @@ unique(index.munge$Sensor)[order(unique(index.munge$Sensor))]
 #Clean the Journals (Not sure about this one, but go over with Matt to look for obvious errors.)
 
 ```{r}
-######################## Journal Cleaning
-### Look at the unique values in order
-unique(index.munge$Journal)[order(unique(index.munge$Journal))]
-
-##Amalgamate as necessary
-terms <- list(
-)
-  
-    
-##Replace terms
-for (i in 1:length(terms)) {
-index.munge <- index.munge %>% mutate(Journal = ifelse(grepl(pattern = terms[[i]], Journal), names(terms[i]), as.character(Journal)))
-}
-  
-##Check the work
-unique(index.munge$Journal)[order(unique(index.munge$Journal))]
+# ######################## Journal Cleaning
+# ### Look at the unique values in order
+# unique(index.munge$Journal)[order(unique(index.munge$Journal))]
+# 
+# ##Amalgamate as necessary
+# terms <- list(
+# )
+#   
+#     
+# ##Replace terms
+# for (i in 1:length(terms)) {
+# index.munge <- index.munge %>% mutate(Journal = ifelse(grepl(pattern = terms[[i]], Journal), names(terms[i]), as.character(Journal)))
+# }
+#   
+# ##Check the work
+# unique(index.munge$Journal)[order(unique(index.munge$Journal))]
 ```
 
 
@@ -258,6 +258,7 @@ index.munge <- index.munge %>% mutate(Atm.Comp = ifelse(grepl(pattern = terms[[i
 ##Check the work
 unique(index.munge$Atm.Comp)[order(unique(index.munge$Atm.Comp))]
 
+index.munge$Atm.Comp[is.na(index.munge$Atm.Comp)] = 'none'
 ```
 
 
@@ -313,7 +314,7 @@ index.munge <- index.munge %>%
 unique(index.munge$Landscape.var)[order(unique(index.munge$Landscape.var))]
 ```
 
-# Number of Models Cleaning
+# Country Cleaning
 
 ```{r}
 ####################### Location Cleaning 

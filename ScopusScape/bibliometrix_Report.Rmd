@@ -49,12 +49,21 @@ library(tidyverse)
 # Data Loading and Converting
 ```{r Data loading, warning=FALSE}
 # Loading txt or bib files into R environment
-D <- readFiles('ScopusScape/scopusBib.bib')
+# D <- readFiles('ScopusScape/scopusBib.bib')
+# 
+# # Converting the loaded files into a R bibliographic dataframe
+# #M <- convert2df(D, dbsource="isi",format="plaintext")
+# M <- scopus2df(D) 
+# M <- M %>% filter(DT == 'ARTICLE'|DT == 'ARTICLE IN PRESS')
 
-# Converting the loaded files into a R bibliographic dataframe
-#M <- convert2df(D, dbsource="isi",format="plaintext")
-M <- scopus2df(D) 
-M <- M %>% filter(DT == 'ARTICLE'|DT == 'ARTICLE IN PRESS')
+####### V3 With Standardized Searches
+D <- readFiles('ScopusScape/scopusBib.bib')
+Lakes <- readFiles('ScopusScape/lakesv3.bib') %>% scopus2df(.)
+Rivers <- readFiles('ScopusScape/riversv3.bib') %>% scopus2df(.)
+Estuary.Delta <- readFiles('ScopusScape/estdeltv3.bib') %>% scopus2df(.)
+InlandWater <- readFiles('ScopusScape/case2v3.bib') %>% scopus2df(.)
+
+M <- Lakes %>% full_join(Rivers) %>% full_join(Estuary.Delta) %>% full_join(InlandWater) %>% distinct(TI,AU, .keep_all = T)
 
 #Clean the Journal Names a little big
 ### Look at the unique values in order

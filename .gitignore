@@ -7,3 +7,5 @@
 *.png
 *.csv
 *.feather
+.DS_Store
+*.txt

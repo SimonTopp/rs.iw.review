@@ -61,8 +61,8 @@ filt <- munge %>%
 ```{r}
 ### Four panel figure 
 
-
-##### For version with mixed years as labels, create mixed year variable where early years are binned together.   Otherwise leave this commented out.
+##### For version with mixed years as labels, create mixed year variable where
+# early years are binned together.   Otherwise leave this commented out.
 ######
 
 filt <- filt %>% mutate(Year.Bin = paste0(trunc(Year/5) * 5 - 1900,'-', trunc(Year/5) * 5 + 4 - 1900),
@@ -139,12 +139,12 @@ viz <- function(data, x, fill, stack, label){
 ####Yearly Distributions of Publication Characteristics (Figure 5)
 
 ### Frequency Distribution Version
-##Parameter Groups
+## Parameter Groups
 p1 <- viz(munge, munge$Year, munge$Parameter.Grp, 'fill', 'Modelled Parameters') +
   scale_fill_brewer(breaks = levels(munge$Parameter.Grp), labels = c("Algae", "Carbon", "Clarity", "Suspended\nSediment", "Turbidity", "Nutrients", "Other"),
                      palette = 'Paired')
 
-##Modelling Approach
+## Modelling Approach
 p2 <- viz(filt, filt$Year, filt$Model, 'fill', 'Modelling Approach')
 
 ## Study Coverage
@@ -166,12 +166,12 @@ ggplot2::ggsave(filename='figures/YearDist.png',plot = g, width=6.5,height=6, un
 
 
 #############Stacked Bars VersionFigure
-##Parameter Groups
+## Parameter Groups
 p1 <- viz(munge, as.factor(munge$Year.Mixed), munge$Parameter.Grp, 'stack', 'Modelled Parameters') +
   scale_fill_brewer(breaks = levels(munge$Parameter.Grp), labels = c("Algae", "Carbon", "Clarity", "Suspended\nSediment", "Turbidity", "Nutrients", "Other"),
                      palette = 'Paired') 
 
-##Modelling Approach
+## Modelling Approach
 p2 <- viz(filt, filt$Year.Mixed, filt$Model, 'stack', 'Modelling Approach')  +
   scale_fill_brewer(breaks = levels(munge$Model),
                      palette = 'Paired')
@@ -192,7 +192,7 @@ g <- grid.arrange(
 )
 ggsave(filename='figures/YearDistStackYearMixed.png',plot = g, width=6.5,height=6, units='in', dpi=250)
 
-#############Bar Figure
+#############Bar Version
 ## Parameter Group
 p1 <- viz(munge, as.factor(munge$Year), munge$Parameter.Grp, 'bar', 'Modelled Parameters') +
   scale_fill_brewer(breaks = levels(munge$Parameter.Grp), labels = c("Algae", "Carbon", "Clarity", "Suspended\nSediment", "Turbidity", "Nutrients", "Other"),
@@ -286,9 +286,13 @@ df <- filt %>%
   dplyr::select(Pub.Year = Year, Study.Duration = Years, Study.Scale = Coverage.KM, Study.Category = Cat) %>% as.matrix()
 
 corcos <- rcorr(df, type = 'pearson')
+# Correlation Coefficients
 write.csv(corcos$r, file = 'out/cormatrix.csv')
+
+# P values
 write.csv(corcos$P, file = 'out/corpval.csv')
 
+## Correlation plot
 corrplot.mixed(corcos$r, order="hclust", tl.pos = 'd',  
          p.mat = corcos$P, sig.level = c(0.1,0.05, 0.01), insig = "label_sig", pch.cex = 0.7)
 ```
@@ -304,7 +308,7 @@ library(rgdal)
 library(magrittr)
 library(viridis)
 
-# Convert filtered index into spatial object and remove studies without explicity lat/long
+# Convert filtered index into spatial object and remove studies without explicit lat/long
 filt.sf <- filt %>% 
   filter(!is.na(Lat)) %>% 
   st_as_sf(.,coords=c('Long','Lat'),crs=4326) %>%
@@ -535,7 +539,7 @@ error.long$Metric[error.long$Metric == ''] = 'none'
 error.long$Error[error.long$Error == ''] = 'none'
 
 
-!= ## Check out the results
+## Check out the results
 unique(error.long$Metric)[order(unique(error.long$Metric))]
 
 ### Pull the R2 Values to make error time series figure

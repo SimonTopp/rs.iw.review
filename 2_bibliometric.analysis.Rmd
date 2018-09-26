@@ -67,7 +67,7 @@ cbind(CR$Cited[1:50])
 ## Summary Scopus Scrape Figures
 
 ```{r}
-# Combine data and create label for search term
+# Combine data and create label for each search term
 Lakes <- Lakes %>% mutate(Lakes = 1)
 Rivers <- Rivers %>% mutate(Rivers = 1)
 InlandWater <- InlandWater %>% mutate(InlandWater = 1)
@@ -151,6 +151,7 @@ scrape <- scrape %>%
   left_join(x, by = c('Year'))
 
 
+# Plot the total publication counts and average citations (Figrure 1)
 ggplot(scrape) + 
   geom_bar(aes(x = Year, y = ..count.., fill = Waterbody)) +
   geom_line(aes(x = Year, y = yearly.cites/16), color = 'Red') +

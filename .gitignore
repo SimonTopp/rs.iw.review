@@ -4,3 +4,6 @@
 .Ruserdata
 .csv
 .httr-oauth
+*.png
+*.csv
+*.feather

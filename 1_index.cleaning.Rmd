@@ -1,0 +1,354 @@
+---
+title: "index.analysis"
+author: "Simon Topp"
+date: "5/30/2018"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+# Remote Sensing of Inland Waters Index Munge
+
+This script pulls down the most recent version of the rsiw index and cleans all of it's parameters making a figure friendly and clean outfacing index.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(googledrive)
+library(feather)
+
+```
+
+
+## Download google doc, rename, and create new munged file
+
+```{r}
+## Munging
+
+# Download latest version
+drive_download(as_id('https://docs.google.com/spreadsheets/d/1fHsqm74c2sp2LyZjredmHMLvS08nlfHZTxf49eNon4Y/edit?usp=sharing'), path = 'in/wqIndex20180921.csv', overwrite = T)
+
+
+# Rename all the columns
+index <- read.csv('in/wqIndex20180921.csv', na.string = c('','na')) %>% 
+  select(ID = Paper.ID, Author, Journal, Year, DOI, Location, Lat, Long, Coverage.KM = Study.Scale..sq.km., Years = Timescale..in.years., Waterbody, Sensor = Sensor.s., Sensor.Type,  Atm.Comp = Atm..Comparison, Best.AC = Best.A..Correction, Parameter = Constituent, Landscape.var = Landscape.Variables.in.final.model, Num.Models = Number.of.models.used, Model.Comparison = Modelling.Approach.Comparison, Model = Chosen.Model.Approach, EF = Error..fit., EF.metric = Error.metric..fit., EV = Error..validation., EV.metric = Error.Metric..validation., Figs.m = Methodology.Figs.Tables, Figs.v = Validation.Figs.Tables, Figs.t = Applied.Figures, Cat = Category, Rating = Category.Rating..1.10.)
+  
+# Add a couple new parameters
+index.munge <- index %>% 
+  mutate(Cat = if_else(Rating < 4, 'Methods', ifelse(Rating == 4, 'Methods w/ Pattern App', ifelse(Rating > 7, 'Applied','Trends/Patterns'))),
+         Year.Bin = paste0(trunc(Year/5) * 5,'-', trunc(Year/5) * 5 + 4),
+         Time.Bin= cut(Years, breaks = c(-Inf, 1/365, 1/12, 1, 5, 10, Inf),
+                        labels = c('Snapshot', '< 1 Month', '< 1 Year', '1-5 Years', '5-10 Years','>10 Years')))
+
+
+# Create filtered version with only 1 entry per publication
+index.filt <- index.munge %>%
+  select(-c(Parameter, Landscape.var, Num.Models, Model.Comparison, Best.AC, EF,EF.metric,EV,EV.metric,Parameter, Atm.Comp, Sensor.Type, Sensor)) %>%
+  distinct(ID, .keep_all = T)
+
+```
+
+## Clean the Study Parameters
+
+```{r}
+### Look at the unique values in order
+unique(index.munge$Parameter)[order(unique(index.munge$Parameter))]
+
+##Amalgamate as necessary
+terms <- list(
+Sediments.Other = c('^OSS|^VSS|^NVSS|^NPSS$|tripton|Tripton|^ISS'),
+Cyanobacteria = c('^BG|^phycocyanin|^cy$|^CY$|^PC$|cyanobacteria|^C-PC$'),
+Chl = c('CHL|chl-a|Chl-a|Chl-b|Chl-c|Green algae|Green Biovolume|Algal Blooms|Algae|^chlorophyll$'),
+Carbon.Other = c('^TOC|^COD|^BOD|^DIC|^NPOC|^pCO2|^TIC'),
+Chromaticity = c('chromaticity|Color'),
+Trophic = c('^TSI'),
+Clarity = c('SDD|^SD|Secchi|Kd\\(PAR\\)|Kd\\(490\\)|^Kpar$'),
+Turbidity = c('turb|Turb|Turbidity|TURB'),
+Nutrients = c('^TN|NH3-N|NO3-N|^TP|^DP'),
+Metals = c('^Pb|^As|^Zn|Total heavy metals'),
+Other = c('^pH|Diatom|water type|class|^DO$|Conductivity|Depth|^CYS$|^TDS$|^Acidic water$|^Salinity'),
+TSS = c('^DW$|^SDW|^SPM|^SS$|^SSC|^SM$|^TSM|^Seston$'),
+CDOM = c('^CDOM$|^DOC$')
+)
+  
+##Replace terms
+for (i in 1:length(terms)) {
+index.munge <- index.munge %>% mutate(Parameter = ifelse(grepl(pattern = terms[[i]], Parameter), names(terms[i]), as.character(Parameter)))
+}
+  
+##Check the work
+unique(index.munge$Parameter)[order(unique(index.munge$Parameter))]
+
+##Munge 2 Experiment:  More general categories
+##Amalgamate as necessary
+terms <- list(
+Suspended.Sediment = c('^Sediments.Other$|^TSS$'),
+Carbon = c('^Carbon.Other$|^CDOM$|^DOC$'),
+Nutrients = c('^Metals$'),
+Algae = c('^Chl$|^Cyanobacteria$'),
+Other = c('^Chromaticity$|^Trophic$')
+)
+
+##Replace terms
+index.munge$Parameter.Grp <- index.munge$Parameter
+for (i in 1:length(terms)) {
+index.munge <- index.munge %>% mutate(Parameter.Grp = ifelse(grepl(pattern = terms[[i]], Parameter.Grp), names(terms[i]), as.character(Parameter.Grp)))
+}
+###Check work
+unique(index.munge$Parameter.Grp)[order(unique(index.munge$Parameter.Grp))]
+```
+
+## Clean the waterbodies
+
+```{r}
+### Look at the unique values in order
+unique(index.munge$Waterbody)[order(unique(index.munge$Waterbody))]
+
+##Amalgamate as necessary
+terms <- list(
+Lakes = c('^Lake$|^Reservoirs$|^Reservoir$'),
+Rivers = c('^River$|^Stream$'),
+Deltas = '^Delta$',
+Estuaries = c('^Estuary$|^Coast$|^Sea$|^Lagoon'),
+Multiple = c('^Lakes,\\sCoastal\\sWaters$|^Lakes,\\sestuaries$|^Lakes, Rivers$|^Lakes,\\sRivers,\\sEsturaries$|^River,\\sDelta$|^River, Estuary$|^River, Wetlands$|^River/Estuary$|^River/Delta$')
+)
+  
+##Replace terms
+for (i in 1:length(terms)) {
+index.munge <- index.munge %>% mutate(Waterbody = ifelse(grepl(pattern = terms[[i]], Waterbody), names(terms[i]), as.character(Waterbody)))
+}
+  
+##Check the work
+unique(index.munge$Waterbody)[order(unique(index.munge$Waterbody))]
+```
+
+## Clean the Modelling Approaches 
+
+```{r}
+### Look at the unique values in order
+unique(index.munge$Model)[order(unique(index.munge$Model))]
+
+##Amalgamate as necessary
+terms <- list(
+Semi.Analytical = c('^Analytic$|^Analytical$|^Semi-Analytic$|^Semi-analytical$|^semi-analytical$|^Semi.Analytic$|^chromaticity$|^analytical$|^Semi-analytical - QAA$|^semi-analytical \\(spectral shape\\)$|^semi-analytical \\(Matrix Inversion\\)$|^IOP$|^Semi-Analytical$|^Spectral Mixture Analysis$'),
+Machine.Learning = c('^ANN - NARXNET$|^ANN$|^EOF$|^RF$|^GP$|^GA-BP-NN$|^Symbolic regression$|^LUT\\(ML\\)$|^HCA$'),
+Mixed = c('^mixed$|^Empirical, Semi-analytic$'),
+Product = c('^product$|SeaDas'),
+Empirical = c('^empirical$|^Emprical$|^emprical$|^semi-empirical$|^Normalized Difference$|^empirical$|^OC2|^End-member mixing \\(Empirical\\)$'),
+Semi.Empirical = c('^Semi-Empirical$')
+)
+  
+    
+##Replace terms
+for (i in 1:length(terms)) {
+index.munge <- index.munge %>% mutate(Model = ifelse(grepl(pattern = terms[[i]], Model), names(terms[i]), as.character(Model)))
+}
+  
+index.munge$Model[index.munge$Model == 'none'] = NA
+
+##Check the work
+unique(index.munge$Model)[order(unique(index.munge$Model))]
+```
+
+## Sensor type cleaning
+
+```{r}
+### Look at the unique values in order
+unique(index.munge$Sensor.Type)[order(unique(index.munge$Sensor.Type))]
+  
+##Amalgamate as necessary
+terms <- list(
+Multispectral = c('^miltispectral$|^multispectral$|^mut$'),
+Hyperspectral = c('^hyperspectral$'),
+Mixed = c('^hyperspectral, multispectral$|^hyperspectral/multispectral$|^multispectral, Hyperspectral$|^mixed$')
+)
+
+for (i in 1:length(terms)) {
+index.munge <- index.munge %>% mutate(Sensor.Type = ifelse(grepl(pattern = terms[[i]], Sensor.Type), names(terms[i]), as.character(Sensor.Type)))
+}
+  
+##Check the work
+unique(index.munge$Sensor.Type)[order(unique(index.munge$Sensor.Type))]
+  
+```
+
+
+## Sensor Cleaning
+
+```{r}
+### Look at the unique values in order
+unique(index.munge$Sensor)[order(unique(index.munge$Sensor))]
+  
+index.munge$Sensor= index.munge$Sensor %>% 
+  gsub(x = .,pattern = '(L)([0-9])', replacement = 'Landsat \\2') %>%
+  gsub(x = ., pattern = '(S)([0-9])', replacement = 'Sentinel \\2')
+  
+##Check the work
+unique(index.munge$Sensor)[order(unique(index.munge$Sensor))]
+  
+```
+
+## Atmospheric Comparison Cleaning
+
+```{r}
+### Look at the unique values in order
+unique(index.munge$Atm.Comp)[order(unique(index.munge$Atm.Comp))]
+  
+##Amalgamate as necessary
+terms <- list(
+no = c('^none$')
+)
+
+for (i in 1:length(terms)) {
+index.munge <- index.munge %>% mutate(Atm.Comp = ifelse(grepl(pattern = terms[[i]], Atm.Comp), names(terms[i]), as.character(Atm.Comp)))
+}
+  
+##Check the work
+unique(index.munge$Atm.Comp)[order(unique(index.munge$Atm.Comp))]
+
+index.munge$Atm.Comp[is.na(index.munge$Atm.Comp)] = 'none'
+```
+
+
+## Atmospheric Correction Cleaning
+
+```{r}
+### Look at the unique values in order
+unique(index.munge$Best.AC)[order(unique(index.munge$Best.AC))]
+  
+##Amalgamate as necessary
+terms <- list(
+unknown = c('^Unknown$'),
+no = c('^none$')
+)
+
+for (i in 1:length(terms)) {
+index.munge <- index.munge %>% mutate(Best.AC = ifelse(grepl(pattern = terms[[i]], Best.AC), names(terms[i]), as.character(Best.AC)))
+}
+
+index.munge <- index.munge %>%
+  mutate(Best.AC = ifelse(!grepl(pattern = c('^no$|^unknown$'), Best.AC), 'yes',
+                          as.character(Best.AC)))
+
+  
+##Check the work
+unique(index.munge$Best.AC)[order(unique(index.munge$Best.AC))]
+
+```
+
+
+## Landscape Variables Comparison Cleaning
+
+```{r}
+### Look at the unique values in order
+unique(index.munge$Landscape.var)[order(unique(index.munge$Landscape.var))]
+  
+##Amalgamate as necessary
+terms <- list(
+no = c('^none$')
+)
+
+for (i in 1:length(terms)) {
+index.munge <- index.munge %>% mutate(Landscape.var = ifelse(grepl(pattern = terms[[i]], Landscape.var), names(terms[i]), as.character(Landscape.var)))
+}
+
+index.munge <- index.munge %>%
+  mutate(Landscape.var = ifelse(!grepl(pattern = c('^no$|^unknown$'), Landscape.var), 'yes', as.character(Landscape.var)))
+
+  
+##Check the work
+unique(index.munge$Landscape.var)[order(unique(index.munge$Landscape.var))]
+```
+
+## Country Cleaning
+
+```{r}
+### Look at the unique values in order
+unique(index.munge$Location)[order(unique(index.munge$Location))]
+  
+##Amalgamate as necessary
+terms <- list(
+United.States = c('Arizona|California|Carolinas|Illinois, Nebraska, Minnesota, Maryland|Indiana|Florida|Kansas|Louisiana|Main/New Hampshire|Michigan|Minnesota|Missouri|New York|Ohio|Tennessee|Utah| Wyoming/Michigan|Arkansas|Delaware/New Jersey|Eastern US|Illinois|Kentucky|Maine|Minneapolis|Mississippi|Nebraska|Nevada|USA|Wisconsin|New England|Rochester|Nebrasaka|United States'),
+Canada = c('Alberta|British Columbia|Quebec'),
+Brazil = c('Sao Paulo, Brazil'),
+Scandinavia = c('Sweden|Finland|Estonia/Sweden'),
+China = c('China'),
+Italy = c('Venice lagoon'),
+Argentina = c('Argentina'),
+India = 'India',
+Mali = 'Mali'
+)
+
+for (i in 1:length(terms)) {
+index.munge <- index.munge %>% mutate(Location = ifelse(grepl(pattern = terms[[i]], Location), names(terms[i]), as.character(Location)))
+}
+
+##Check the work
+unique(index.munge$Location)[order(unique(index.munge$Location))]
+```
+
+## Add additional metadata
+
+Pull the DOI's recorded while making the index and use the scopus scraper functions (author:christopherBelter) to pull down article metatdata, included citation counts and titles.  Join the long metadata to the original index.
+
+```{r}
+library(httr)
+library(XML)
+
+# Source Scopus scraper functions written by Christopher Belter
+source('ScopusScraper.R')
+
+# Split DOI and join with scrape citation counts
+for (i in 1:length(index.munge$DOI)){
+  index.munge$DOI.Short[i] <- paste0('10',str_split(index.munge$DOI[i], pattern  = '10', n = 2)[[1]][2])
+}
+
+# # Create .txt file to put into Scraper function
+# dois <- index.munge %>% distinct(DOI.Short, .keep_all=T)
+# write(dois$DOI.Short, 'in/dois.txt')
+# 
+# # Run the DOIs through scopus
+# query <- searchByID(theIDs = 'dois.txt', idtype = 'doi', content = 'standard', outfile = 'out/dois.xml')
+
+# Pull the relevant information and join it back into the original index.
+doisR <- extractXML('out/dois.xml') %>% 
+   select(doi, Title = articletitle, Cite.Count = timescited)
+
+index.munge <- index.munge %>%
+  left_join(doisR, by = c('DOI.Short' = 'doi'))
+
+## *Note that this process still leaves a few papers where either their is no DOI, or the recorded DOIs don't match Scopus and need to be searched for manually.
+```
+
+## Munge the error and validation columns
+
+Seperate the error and validation columns out into distinct columns so each only contains 1 error metric.
+
+```{r}
+Error.munge<- str_split_fixed(index.munge$EF, pattern = ',', n = 4) %>%
+  cbind(str_split_fixed(index.munge$EF.metric, pattern = ',', n = 4)) %>%
+  cbind(str_split_fixed(index.munge$EV, pattern = ',', n = 4)) %>%
+  cbind(str_split_fixed(index.munge$EV.metric, pattern = ',', n = 4)) %>%
+  as.tibble() %>%
+  rename(Error.fit1 = V1, Error.fit2 = V2, Error.fit3 = V3, Error.fit4 = V4, Fit.metric1 =V5, Fit.metric2 = V6, Fit.metric3 = V7, Fit.metric4 = V8, Error.val1 = V9, Error.val2 = V10, Error.val3 = V11, Error.val4 = V12, Val.metric1 = V13, Val.metric2 = V14, Val.metric3 =V15, Val.metric4 =V16)
+
+index.munge <- index.munge %>%
+  bind_cols(Error.munge) %>%
+  select(-c(EF, EF.metric, EV, EV.metric))
+```
+
+## Export the munged index
+
+```{r}
+# Full version for figures.
+write_feather(index.munge, 'out/IndexMungedFull.feather')
+
+# Outfacing for publication
+out <- index.munge %>%
+  select(ID, Author, Journal, Title, Year, DOI, Location:Sensor.Type, Atm.Correction = Best.AC, Parameter, Parameter.Grp, Num.Models:Cat, Error.fit1:Val.metric3, Cite.Count )
+
+write.csv(out, 'out/IndexMunged20180921.csv')
+```
+
+

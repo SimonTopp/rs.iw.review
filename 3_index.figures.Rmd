@@ -1,0 +1,640 @@
+---
+title: "index.figures"
+author: "Simon Topp"
+date: "7/6/2018"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(RColorBrewer)
+library(scales)
+library(tidyverse)
+library(gridExtra)
+library(grid)
+library(lattice)
+library(viridis)
+library(knitr)
+library(kableExtra)
+library(feather)
+```
+
+# Bring in the munged data set and do a little more cleaning
+
+```{r}
+# Read in munged index.  Filter out incomplete entries.
+munge <- read_feather('out/IndexMungedFull.feather') %>%  
+  filter(!is.na(Model))
+
+#Do a little more munging
+#Reorder Models
+munge$Model <- factor(munge$Model, levels = c('Empirical', 'Semi.Empirical', 'Semi.Analytical', 'Machine.Learning', 'Mixed', 'Product'))
+
+#Reorder Parameters
+munge$Parameter <- factor(munge$Parameter, levels = c('Chl', 'TSS', 'Clarity', 'CDOM', 'Nutrients', 'Turbidity', 'Carbon.Other', 'Cyanobacteria', 'Sediments.Other', 'Metals', 'Chromaticity', 'Trophic', 'Other'), labels = c('Chl', 'TSS', 'Clarity', 'CDOM', 'Nutrients', 'Turbidity', 'Other Carbon', 'Cyanobacteria', 'Other Sediments', 'Metals', 'Chromaticity', 'Trophic State', 'Other'))
+
+#Reorder Paramter Group
+munge$Parameter.Grp <- factor(munge$Parameter.Grp, 
+                              levels = c("Algae","Carbon", "Clarity", "Suspended.Sediment","Turbidity", "Nutrients", "Other"))
+
+# Factor coverage
+munge$Coverage.KM <- factor(munge$Coverage.KM, levels = c('0','1','2','3','4','5','6'), labels = c('unknown','10^1','10^2', '10^3', '10^4', '10^5', '10^6'))
+
+# Reorder category
+munge$Cat <- factor(munge$Cat, levels = c('Methods', 'Methods w/ Pattern App', 'Trends/Patterns', 'Applied'))
+
+# Reorder waterbodies
+munge$Waterbody <- factor(munge$Waterbody, levels = c('Lakes', 'Rivers', 'Deltas', 'Estuaries', 'Multiple'))
+
+#Create Filtered Set With only 1 entry per paper.
+filt <- munge %>%
+  select(-c(Parameter, Landscape.var, Num.Models, Best.AC,Error.fit1, Error.fit2,Error.fit3,Error.val1,Error.val2,Error.val3,Fit.metric1, Fit.metric2,Fit.metric3,Val.metric1,Val.metric2,Val.metric3, Atm.Comp)) %>%
+  distinct(ID, .keep_all = T)
+
+```
+
+# Figures from the actual index.
+
+```{r}
+### Four panel figure 
+
+
+##### For version with mixed years as labels, create mixed year variable where early years are binned together.   Otherwise leave this commented out.
+######
+
+filt <- filt %>% mutate(Year.Bin = paste0(trunc(Year/5) * 5 - 1900,'-', trunc(Year/5) * 5 + 4 - 1900),
+                        Year.Mixed = ifelse(Year < 2000, Year.Bin, Year),
+                        Year.Mixed = factor(Year.Mixed, levels = unique(Year.Mixed[order(Year)], ordered = T)),
+                        Year.Bin = paste0(trunc(Year/5) * 5,'-', trunc(Year/5) * 5 + 4))
+
+
+munge <- munge %>% mutate(Year.Bin = paste0(trunc(Year/5) * 5 - 1900,'-', trunc(Year/5) * 5 + 4 - 1900),
+                        Year.Mixed = ifelse(Year < 2000, Year.Bin, Year),
+                        Year.Mixed = factor(Year.Mixed, levels = unique(Year.Mixed[order(Year)], ordered = T)),
+                        Year.Bin = paste0(trunc(Year/5) * 5,'-', trunc(Year/5) * 5 + 4))
+
+
+# Make function for individual plots
+viz <- function(data, x, fill, stack, label){
+        if(stack == 'stack'){
+        plot <-ggplot(data, aes(x = x,fill = fill)) +
+                geom_bar(position = 'fill', alpha = 0.8) +
+                scale_y_continuous(labels = percent) +
+                scale_fill_brewer(palette = 'Paired') +
+                scale_x_discrete(breaks = c('75-79','85-89','95-99', paste0(seq(2001,2018,2)))) +
+                theme_bw() + 
+                labs(x = 'Years', y = 'Count', fill = label) + 
+                theme(axis.text.x = element_text(angle = 90, 
+                                                 hjust = 1,
+                                                 vjust = 0.5),
+                legend.text=element_text(size=7),
+                axis.title = element_blank(),
+                legend.position = 'top',
+                legend.title=element_text(size=9),
+                legend.key.size = unit(0.5,'cm')) +
+                guides(fill = guide_legend(nrow = 2, title.position = 'top'))
+        } 
+        if(stack == 'fill'){
+        plot <- ggplot(data, aes(x = x, fill = fill)) + 
+        geom_density(position = 'fill', alpha = 0.6, adjust = 1/2) + 
+        scale_y_continuous(labels = percent) +
+        scale_x_continuous(breaks = pretty_breaks(n=10)) +
+        scale_fill_brewer(palette = 'Paired') +
+        theme_bw() + 
+        labs(x = 'Year', y = 'Distribution', fill = label) + 
+        theme(axis.text.x = element_text(angle = 90, 
+                                         hjust = 1, 
+                                         vjust = 0.5),
+              legend.text=element_text(size=7),
+              axis.title = element_blank(),
+              legend.position = 'top',
+              legend.title=element_text(size=9),
+              legend.key.size = unit(0.5,'cm')) +
+        guides(fill = guide_legend(nrow = 2, title.position = 'top'))
+        }
+      if(stack == 'bar'){
+        plot <-ggplot(data, aes(x = x,fill = fill)) +
+                geom_bar(position = 'stack', alpha = 0.8) +
+                scale_fill_brewer(palette = 'Paired') +
+                scale_x_discrete(breaks = pretty_breaks(n=8)) +
+                theme_bw() + 
+                labs(x = 'Years', y = 'Count', fill = label) + 
+                theme(axis.text.x = element_text(angle = 90,
+                                                 hjust = 1,
+                                                 vjust = 0.5),
+                legend.text=element_text(size=7),
+                axis.title = element_blank(),
+                legend.position = 'top',
+                legend.title=element_text(size=9),
+                legend.key.size = unit(0.5,'cm')) +
+                guides(fill = guide_legend(nrow = 2, title.position = 'top'))
+        } 
+  return(plot)
+  }
+
+
+####Yearly Distributions of Publication Characteristics (Figure 5)
+
+### Frequency Distribution Version
+##Parameter Groups
+p1 <- viz(munge, munge$Year, munge$Parameter.Grp, 'fill', 'Modelled Parameters') +
+  scale_fill_brewer(breaks = levels(munge$Parameter.Grp), labels = c("Algae", "Carbon", "Clarity", "Suspended\nSediment", "Turbidity", "Nutrients", "Other"),
+                     palette = 'Paired')
+
+##Modelling Approach
+p2 <- viz(filt, filt$Year, filt$Model, 'fill', 'Modelling Approach')
+
+## Study Coverage
+cov <- filt %>% filter(Coverage.KM != 'unknown')
+p3 <- viz(cov, cov$Year, cov$Coverage.KM, 'fill', expression(paste('Coverage Scale (km'^'2',')')))
+
+## Study Time Spand
+p4 <- viz(filt, filt$Year, filt$Time.Bin, 'fill', 'Study Duration')
+
+g <- grid.arrange(
+  grobs = list(p1,p2,p3,p4),
+  layout_matrix = rbind(c(1, 2),
+                        c(3, 4)),
+  left = 'Distribution',
+  bottom = 'Year'
+)
+ 
+ggplot2::ggsave(filename='figures/YearDist.png',plot = g, width=6.5,height=6, units='in', dpi=250)
+
+
+#############Stacked Bars VersionFigure
+##Parameter Groups
+p1 <- viz(munge, as.factor(munge$Year.Mixed), munge$Parameter.Grp, 'stack', 'Modelled Parameters') +
+  scale_fill_brewer(breaks = levels(munge$Parameter.Grp), labels = c("Algae", "Carbon", "Clarity", "Suspended\nSediment", "Turbidity", "Nutrients", "Other"),
+                     palette = 'Paired') 
+
+##Modelling Approach
+p2 <- viz(filt, filt$Year.Mixed, filt$Model, 'stack', 'Modelling Approach')  +
+  scale_fill_brewer(breaks = levels(munge$Model),
+                     palette = 'Paired')
+
+## Study Coverage
+cov <- filt %>% filter(Coverage.KM != 'unknown')
+p3 <- viz(cov, as.factor(cov$Year.Mixed), cov$Coverage.KM, 'stack', expression(paste('Coverage Scale (km'^'2',')')))
+
+## Study Duration
+p4 <- viz(filt, as.factor(filt$Year.Mixed), filt$Time.Bin, 'stack', 'Study Duration')
+
+g <- grid.arrange(
+  grobs = list(p1,p2,p3,p4),
+  layout_matrix = rbind(c(1, 2),
+                        c(3, 4)),
+  left = 'Distribution',
+  bottom = 'Year'
+)
+ggsave(filename='figures/YearDistStackYearMixed.png',plot = g, width=6.5,height=6, units='in', dpi=250)
+
+#############Bar Figure
+## Parameter Group
+p1 <- viz(munge, as.factor(munge$Year), munge$Parameter.Grp, 'bar', 'Modelled Parameters') +
+  scale_fill_brewer(breaks = levels(munge$Parameter.Grp), labels = c("Algae", "Carbon", "Clarity", "Suspended\nSediment", "Turbidity", "Nutrients", "Other"),
+                     palette = 'Paired')
+
+## Mondelling Appraoch
+p2 <- viz(filt, as.factor(filt$Year), filt$Model, 'bar', 'Modelling Approach')  +
+  scale_fill_brewer(breaks = levels(munge$Model),
+                     palette = 'Paired')
+
+## Study Coverage
+cov <- filt %>% filter(Coverage.KM != 'unknown')
+p3 <- viz(cov, as.factor(cov$Year), cov$Coverage.KM, 'bar', expression(paste('Coverage Scale (km'^'2',')')))
+
+## Study Duration
+p4 <- viz(filt, as.factor(filt$Year), filt$Time.Bin, 'bar', 'Study Duration')
+
+g <- grid.arrange(
+  grobs = list(p1,p3,p2,p4),
+  layout_matrix = rbind(c(1, 2),
+                        c(3, 4)),
+  left = 'Distribution',
+  bottom = 'Year'
+)
+ggsave(filename='figures/YearDistBar.png',plot = g, width=6.5,height=6, units='in', dpi=250)
+
+## Causal fig (Figure 7)
+ggplot(filt, aes(x = Year, fill = Cat)) + 
+        geom_density(position = 'fill', alpha = 0.6, adjust = 1/2) + 
+        scale_y_continuous(labels = percent) +
+        scale_x_continuous(breaks = pretty_breaks(n=10)) +
+        scale_fill_brewer(palette = 'Paired') +
+        theme_bw() + 
+        labs(x = 'Year', y = 'Distribution', fill = 'Analysis Level') + 
+        theme(axis.text.x = element_text(angle = 90, 
+                                         hjust = 1, 
+                                         vjust = 0.5),
+              legend.text=element_text(size=7),
+              axis.text = element_text(size = 7),
+              legend.position = 'top',
+              legend.title=element_text(size=9),
+              legend.key.size = unit(0.5,'cm')) +
+        guides(fill = guide_legend(nrow = 2, title.position = 'top'))
+
+ggsave(filename='figures/CausalFig.png', width=3,height=3, units='in', dpi=250)
+
+### Yearly Publications and Parameter Publications by Waterbody (Figure 3)
+
+p1 <- ggplot(munge, aes(x= Parameter, y= ..count.., fill = Waterbody)) + 
+  geom_bar()+
+  scale_fill_manual(values = c('#a6cee3', '#fdbf6f', '#1f78b4', '#b2df8a', '#33a02c')) +
+  labs(x = 'Parameter', fill = 'Waterbody\nType', y = 'Count') +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+              legend.text=element_text(size=7),
+              legend.title=element_text(size=8),
+              legend.key.size = unit(0.5,'cm'),
+              #axis.title.y = element_blank(),
+              axis.text=element_text(size=7),
+               axis.title=element_text(size=8)
+        )
+        
+p2 <- ggplot(filt, aes(x = Year.Bin, y = ..count.., fill = Waterbody)) + 
+  geom_bar() +
+  scale_fill_manual(values = c('#a6cee3', '#fdbf6f', '#1f78b4', '#b2df8a', '#33a02c')) +
+  labs(y = 'Publication Count', x = 'Year') +
+  labs(x = 'Time Period', y = 'Publication Count') +
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+        legend.position = 'none',
+        axis.text=element_text(size=6),
+        axis.title=element_text(size=8),
+        axis.title.x = element_text(margin = margin(t = 18)))
+              
+
+g <- grid.arrange(p2, p1, ncol = 2, widths = c(1.5,2))
+
+ggsave(filename='figures/YearParam2Panel.png',plot = g, width=6,height=2.8, units='in', dpi=250)
+```
+
+## Correlation table
+
+```{r}
+library(Hmisc)
+library(GGally)
+library(corrplot)
+
+df <- filt %>% 
+  mutate(Coverage.KM = as.numeric(Coverage.KM),
+         Cat = as.numeric(Cat)) %>%
+  dplyr::select(Pub.Year = Year, Study.Duration = Years, Study.Scale = Coverage.KM, Study.Category = Cat) %>% as.matrix()
+
+corcos <- rcorr(df, type = 'pearson')
+write.csv(corcos$r, file = 'out/cormatrix.csv')
+write.csv(corcos$P, file = 'out/corpval.csv')
+
+corrplot.mixed(corcos$r, order="hclust", tl.pos = 'd',  
+         p.mat = corcos$P, sig.level = c(0.1,0.05, 0.01), insig = "label_sig", pch.cex = 0.7)
+```
+
+# Spatial Figure (Figure 6)
+
+```{r}
+library(ggmap)
+library(maptools)
+library(maps)
+library(sf)
+library(rgdal)
+library(magrittr)
+library(viridis)
+
+# Convert filtered index into spatial object and remove studies without explicity lat/long
+filt.sf <- filt %>% 
+  filter(!is.na(Lat)) %>% 
+  st_as_sf(.,coords=c('Long','Lat'),crs=4326) %>%
+  st_transform(.,54030)
+
+# Pull in world map and reproject
+data("wrld_simpl")
+world = st_as_sf(wrld_simpl) %>%
+    st_transform(.,54030) %>%
+    st_buffer(.,0)
+
+# Set figure options
+fill <- 'gray60'
+color <- 'gray60'
+
+# Check bounding box
+st_bbox(world)
+
+## Category Spatial (not used)
+p1 <- ggplot() + geom_sf(data = world, aes(), fill = fill, color = color) + 
+  geom_sf(data = filt.sf, aes(colour = Cat), size = 0.7,alpha =0.8) + 
+  coord_sf(ylim = c(-6000000, 8338578), xlim = c(-16500000, 16874713)) +
+  theme_bw() +
+  scale_colour_viridis_d(name = 'Paper \n Category') +
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks = element_blank(),
+        rect = element_blank(),
+        legend.position = c(0.2,0.22),
+        legend.background = element_rect(fill = 'white', colour = 'gray50'))
+
+# Publication Year Spatial
+p1<- ggplot() + geom_sf(data = world, aes(), fill = fill, color = color) + 
+  geom_sf(data = filt.sf, aes(colour = Year),size = 0.7, alpha =0.9) + 
+  coord_sf(ylim = c(-6000000, 8338578), xlim = c(-16500000, 16874713)) +
+  theme_bw() +
+  scale_colour_viridis_c(name = 'Publication Year') +
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks = element_blank(),
+        rect = element_blank(),
+        panel.grid.major = element_line(color = 'white'),
+        plot.margin=margin(0,0,0,0, "mm"),
+        legend.margin = margin(0,0,0,0, "mm"),
+        legend.text=element_text(size=7),
+              axis.title = element_blank(),
+              legend.position = 'bottom',
+              legend.title=element_text(size=9),
+              legend.key.size = unit(0.5,'cm'))
+
+#Study Duration
+p2<- ggplot() + geom_sf(data = world, aes(), fill = fill, color = color) + 
+  geom_sf(data = filt.sf, aes(colour = Time.Bin),size = 0.7, alpha =0.9) + 
+  coord_sf(ylim = c(-6000000, 8338578), xlim = c(-16500000, 16874713)) +
+  theme_bw() +
+  scale_colour_viridis_d(name = 'Time Span') +
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks = element_blank(),
+        rect = element_blank(),
+        panel.grid.major = element_line(color = 'white'),
+        plot.margin=margin(0,0,0,0, "mm"),
+        legend.margin = margin(0,0,0,0, "mm"),
+        legend.text=element_text(size=7),
+              axis.title = element_blank(),
+              legend.position = 'bottom',
+              legend.title=element_text(size=9),
+              legend.key.size = unit(0.5,'cm'))
+
+
+#Study Coverage
+p3 <-ggplot() + geom_sf(data = world, aes(), fill = fill, color = color) + 
+  geom_sf(data = filt.sf %>% filter(Coverage.KM != 'unknown'), aes(colour = Coverage.KM),size = .7, alpha =0.9) +
+  coord_sf(ylim = c(-6000000, 8338578), xlim = c(-16500000, 16874713)) +
+  theme_bw() +
+  scale_colour_viridis_d(name = expression(paste('Coverage Scale (km'^'2',')'))) +
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks = element_blank(),
+        rect = element_blank(),
+        plot.margin=grid::unit(c(0,0,0,0), "mm"),
+        panel.grid.major = element_line(color = 'white'),
+        legend.margin = margin(0,0,0,0, "mm"),
+        legend.text=element_text(size=7),
+              axis.title = element_blank(),
+              legend.position = 'bottom',
+              legend.title=element_text(size=9),
+              legend.key.size = unit(0.5,'cm'))
+
+g <- grid.arrange(p1,p2,p3, nrow = 3)
+
+ggsave(filename='figures/Spatial.png', plot = g, width=4,height=7, units='in', dpi=350)
+```
+
+# Figure category distribution plot
+
+```{r}
+
+## Extraneous Figs Distribution Plots
+
+df <- filt %>%
+  mutate(fig.total = Figs.m + Figs.v + Figs.t) %>%
+  gather(c(Figs.m:Figs.t), key = 'fig.type', value = 'fig.count') %>%
+  na.omit() %>%
+  mutate(fig.type = factor(fig.type, levels = c('Figs.m', 'Figs.v', 'Figs.t'), labels = c('Background', 'Validation', 'Applied')))
+
+ggplot(df, aes(x = Cat, y = fig.count/fig.total)) +
+  geom_boxplot(aes(colour = fig.type)) + 
+  scale_x_discrete(labels = c('Methods', 'Methods w/\nPattern App', 'Trends/\nPatterns', 'Applied')) +
+  labs(x = 'Paper Category', y = 'Figure Proportion', 
+       colour = 'Figure Type') #+ 
+  theme(axis.text.x = element_text(angle = 90, 
+                                   vjust = 0.5,
+                                   hjust = 1))
+
+ggsave('figures/FigCountCat.png', width = 5, height = 3, units = 'in', dpi = 300)
+```
+
+
+# Some general summary tables
+```{r}
+## Country summary
+country.sum <- filt %>% 
+  group_by(Location) %>% 
+  summarize(scale = mean(as.numeric(Coverage.KM)),
+            duration = mean(Years),
+            year = mean(Year),
+            count = n(),
+            prop = count/length(filt$ID))
+
+# Applied Paper Summary
+causal.sum <- filt %>%
+  filter(Cat == 'Applied') %>%
+  group_by(Location, Cat) %>% 
+  dplyr::summarize(scale = mean(as.numeric(Coverage.KM)),
+            duration = mean(Years),
+            year = mean(Year),
+            count = n(),
+            prop = count/length(filt$ID))
+
+
+# Summary for period before and after 2008
+papes.sum <- filt %>% 
+  mutate(period = ifelse(Year < 2008, 1, 2),
+         Papes = 1) %>%
+  spread(Cat, Papes) %>%
+  group_by(period) %>%
+  dplyr::summarize(scale = mean(as.numeric(Coverage.KM)),
+            duration = mean(Years),
+            year = mean(Year),
+            count = n(),
+            prop = count/length(filt$ID),
+            methods = sum(Methods, na.rm = T),
+            methodsPatterns = sum(`Methods w/ Pattern App`, na.rm = T),
+            patterns = sum(`Trends/Patterns`, na.rm = T),
+            applied = sum(`Applied`, na.rm = T),
+            m.p = methods/count,
+            mp.p = methodsPatterns/count,
+            p.p = patterns/count,
+            a.p = applied/count,
+            ls = length(Sensor[grepl(x = Sensor,pattern = 'Landsat') == T])/count)
+
+
+```
+
+# Analyze the Error Metrics
+
+```{r}
+
+## Super annoying way to make long error data frame
+
+# Pull and organize fit errors
+ef <- index.munge %>%
+  mutate(model.id = row_number()) %>%
+  select(ID, model.id,Year,Year.Bin, Parameter, Parameter.Grp, Error.fit1:Error.fit4) %>%
+  gather(Error.fit1:Error.fit4, key = metric.num, value = Error) %>%
+  mutate(type = 'Fit')
+ef$fit[ef$metric.num == 'Error.fit1'] <- 1
+ef$fit[ef$metric.num == 'Error.fit2'] <- 2
+ef$fit[ef$metric.num == 'Error.fit3'] <- 3
+ef$fit[ef$metric.num == 'Error.fit4'] <- 4
+ef <- ef %>% mutate(UniqueID = paste0(model.id,'.', fit))
+ 
+efm <- index.munge %>%
+  mutate(model.id = row_number(),
+         type = 'Fit') %>%
+  select(ID, model.id, type, Year, Parameter, Parameter.Grp, Fit.metric1:Fit.metric4) %>%
+  gather(Fit.metric1:Fit.metric4, key = metric.num, value = Metric)
+efm$fit[efm$metric.num == 'Fit.metric1'] <- 1
+efm$fit[efm$metric.num == 'Fit.metric2'] <- 2
+efm$fit[efm$metric.num == 'Fit.metric3'] <- 3
+efm$fit[efm$metric.num == 'Fit.metric4'] <- 4
+efm <- efm %>% mutate(UniqueID = paste0(model.id, '.',fit)) 
+
+error.fit <- left_join(ef, efm %>% select(Metric, UniqueID), by = 'UniqueID')
+
+## Pull and organize validation errors
+ev <- index.munge %>%
+  mutate(model.id = row_number(),
+         type = 'Val') %>%
+  select(ID, model.id,type, Year, Year.Bin, Parameter, Parameter.Grp, Error.val1:Error.val4) %>%
+  gather(Error.val1:Error.val4, key = metric.num, value = Error)
+ev$fit[ev$metric.num == 'Error.val1'] <- 1
+ev$fit[ev$metric.num == 'Error.val2'] <- 2
+ev$fit[ev$metric.num == 'Error.val3'] <- 3
+ev$fit[ev$metric.num == 'Error.val4'] <- 4
+ev <- ev %>% mutate(UniqueID = paste0(model.id,'.', fit))
+ 
+evm <- index.munge %>%
+  mutate(model.id = row_number(),
+         type = 'Val') %>%
+  select(ID, model.id,Year,type, Parameter, Parameter.Grp, Val.metric1:Val.metric4) %>%
+  gather(Val.metric1:Val.metric4, key = val.num, value = Metric)
+evm$fit[evm$val.num == 'Val.metric1'] <- 1
+evm$fit[evm$val.num == 'Val.metric2'] <- 2
+evm$fit[evm$val.num == 'Val.metric3'] <- 3
+evm$fit[evm$val.num == 'Val.metric4'] <- 4
+evm <- evm %>% mutate(UniqueID = paste0(model.id, '.',fit)) 
+
+error.val <- left_join(ev, evm %>% select(Metric, UniqueID), by = 'UniqueID')
+
+# Combine into master error dataframe
+error.long <- bind_rows(error.fit,error.val) %>%
+  mutate(Metric = trimws(Metric)) %>%
+  select(-metric.num)
+
+error.long$Metric[error.long$Metric == ''] = 'none'
+error.long$Error[error.long$Error == ''] = 'none'
+
+
+!= ## Check out the results
+unique(error.long$Metric)[order(unique(error.long$Metric))]
+
+### Pull the R2 Values to make error time series figure
+r <- error.long %>% filter(Metric == 'R2')%>%
+  mutate(Error = as.numeric(Error)) %>%
+  na.omit() %>%
+  filter(Error < 1) #Removes 1 data entry error, remove later
+
+# Error Time Series (Figure 4)
+ggplot(r,aes(x = Year, y = Error, color = type)) + geom_point(size = .9) + 
+  geom_smooth(se = F, size = .7) + 
+  scale_color_discrete(name = 'Error\nType', breaks = c('Fit', 'Val'), labels = c('Fit', 'Validation')) +
+  scale_x_continuous(breaks = pretty_breaks(n = 12)) +
+  labs(y = expression(paste('Coefficient of Determination (R'^2,')'))) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+  theme_bw()
+
+ggsave('figures/R2.png', width = 4, height = 3, units = 'in')
+
+##Metric Counts
+#see the various reported metrics
+unique(error.long$Metric)[order(unique(error.long$Metric))]
+
+
+
+### Go through error metrics and combine to get total counts for different metrics.
+
+# Fit counts
+r.f = length(grep(x = error.fit$Metric, pattern = 'r2', ignore.case = T))
+rmse.f = length(grep(x = error.fit$Metric, pattern = c('rmse|nrms|rmsd'), ignore.case = T))
+se.f = length(grep(x = error.fit$Metric, pattern =
+                     c('^se$|^mse$|^nse$|^sdv$|^see$'), ignore.case = T))
+re.f = length(grep(x = error.fit$Metric, pattern =
+                     c('^\\%|^sre$|^rpd$|^sdv$|^see$|^re|Relative|$mre|mrad|^mpe|lre|^average'), ignore.case = T))
+
+mae.f = length(grep(x = error.fit$Metric, pattern =
+                     c('mare|mape|^mae|^madp'), ignore.case = T))
+bias.f = length(grep(x = error.fit$Metric, pattern =
+                     c('bias|mnb'), ignore.case = T))
+
+#Val Counts
+r.v = length(grep(x = error.val$Metric, pattern = 'r2', ignore.case = T))
+rmse.v = length(grep(x = error.val$Metric, pattern = c('rmse|nrms|rmsd'), ignore.case = T))
+se.v = length(grep(x = error.val$Metric, pattern =
+                     c('^se$|^mse$|^nse$|^sdv$|^see$'), ignore.case = T))
+re.v = length(grep(x = error.val$Metric, pattern =
+                     c('^\\%|^sre$|^rpd$|^sdv$|^see$|^re|Relative|$mre|mrad|^mpe|lre|^average'), ignore.case = T))
+
+mae.v = length(grep(x = error.val$Metric, pattern =
+                     c('mare|mape|^mae|^madp'), ignore.case = T))
+bias.v = length(grep(x = error.val$Metric, pattern =
+                     c('bias|mnb'), ignore.case = T))
+
+counts <- data.frame('Metric' = c(rep(c('R2', 'RMSE', 'Standard Error', 'Relative Error', 'Mean Absolute Error', 'Bias'),2)), 
+                     'Count' = 
+                       c(r.f,rmse.f, se.f, re.f, mae.f, bias.f, r.v, rmse.v, se.v, re.v, mae.v, bias.v),
+                     'type' = c(rep('Fit',6),rep('Val',6)))
+
+
+ggplot(counts, aes(x = Metric, y = Count, fill = type)) + geom_col(position = 'dodge') +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+## Collapse terms list to get general idea of the various ways each metric is reported
+
+rmse.t = error.long$Metric[grep(x = error.long$Metric, pattern = c('rmse|nrms|rmsd'), ignore.case = T)] %>%
+  unique()
+se.t = error.long$Metric[grep(x = error.long$Metric,  pattern =
+c('^se$|^mse$|^nse$|^sdv$|^see$'), ignore.case = T)] %>%
+  unique()
+re.t = error.long$Metric[grep(x = error.long$Metric, pattern = c('^\\%|^sre$|^rpd$|^sdv$|^see$|^re|Relative|$mre|mrad|^mpe|lre|^average'), ignore.case = T)] %>%
+  unique()
+mae.t = error.long$Metric[grep(x = error.long$Metric, pattern = c('mare|mape|^mae|^madp'), ignore.case = T)] %>%
+  unique()
+bias.t = error.long$Metric[grep(x = error.long$Metric, pattern = c('bias|mnb'), ignore.case = T)] %>%
+  unique()
+
+error.metrics <- data.frame('Metric' = c('RMSE', 'Standard Error', 'Relative error', 'MAE', 'BIAS'), 'Terms' = c(paste0(rmse.t, collapse = ', '), paste0(se.t, collapse = ', '), paste0(re.t, collapse = ', '), paste0(mae.t, collapse = ', '), paste0(bias.t, collapse = ', ')))
+
+kable(error.metrics) %>%
+  kable_styling()
+```
+
+# Some extraneous single panel figures 
+
+```{r}
+##### Extraneous single panel Figures
+
+##### Just made out of curiousity, not used in the manuscript
+
+viz(filt, filt$Years, filt$Coverage.KM, 'fill', 'Study\nDuration')
+
+viz(filt, filt$Year, filt$Cat, 'fill', 'Study Category')
+
+viz(filt, as.numeric(filt$Coverage.KM), filt$Parameter.Grp, 'fill', 'Study Category')
+ggsave('figures/yearsCat.png', height = 3, width = 3, units = 'in', dpi = 300)
+
+viz(filt, filt$Year, filt$Cat, 'fill', 'Study Category')
+
+viz(filt, filt$Year, filt)
+
+ggplot(filt, aes(x = Cat, y = as.numeric(Coverage.KM), colour = Parameter.Grp)) + geom_boxplot()
+```

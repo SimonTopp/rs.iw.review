@@ -481,18 +481,19 @@ papes.sum <- filt %>%
 ## Super annoying way to make long error data frame
 
 # Pull and organize fit errors
-ef <- index.munge %>%
+ef <- munge %>%
   mutate(model.id = row_number()) %>%
   select(ID, model.id,Year,Year.Bin, Parameter, Parameter.Grp, Error.fit1:Error.fit4) %>%
   gather(Error.fit1:Error.fit4, key = metric.num, value = Error) %>%
   mutate(type = 'Fit')
+
 ef$fit[ef$metric.num == 'Error.fit1'] <- 1
 ef$fit[ef$metric.num == 'Error.fit2'] <- 2
 ef$fit[ef$metric.num == 'Error.fit3'] <- 3
 ef$fit[ef$metric.num == 'Error.fit4'] <- 4
 ef <- ef %>% mutate(UniqueID = paste0(model.id,'.', fit))
  
-efm <- index.munge %>%
+efm <- munge %>%
   mutate(model.id = row_number(),
          type = 'Fit') %>%
   select(ID, model.id, type, Year, Parameter, Parameter.Grp, Fit.metric1:Fit.metric4) %>%
@@ -506,7 +507,7 @@ efm <- efm %>% mutate(UniqueID = paste0(model.id, '.',fit))
 error.fit <- left_join(ef, efm %>% select(Metric, UniqueID), by = 'UniqueID')
 
 ## Pull and organize validation errors
-ev <- index.munge %>%
+ev <- munge %>%
   mutate(model.id = row_number(),
          type = 'Val') %>%
   select(ID, model.id,type, Year, Year.Bin, Parameter, Parameter.Grp, Error.val1:Error.val4) %>%
@@ -517,7 +518,7 @@ ev$fit[ev$metric.num == 'Error.val3'] <- 3
 ev$fit[ev$metric.num == 'Error.val4'] <- 4
 ev <- ev %>% mutate(UniqueID = paste0(model.id,'.', fit))
  
-evm <- index.munge %>%
+evm <- munge %>%
   mutate(model.id = row_number(),
          type = 'Val') %>%
   select(ID, model.id,Year,type, Parameter, Parameter.Grp, Val.metric1:Val.metric4) %>%
@@ -549,21 +550,26 @@ r <- error.long %>% filter(Metric == 'R2')%>%
   filter(Error < 1) #Removes 1 data entry error, remove later
 
 # Error Time Series (Figure 4)
-ggplot(r,aes(x = Year, y = Error, color = type)) + geom_point(size = .9) + 
-  geom_smooth(se = F, size = .7) + 
+ggplot(r,aes(x = Year, y = Error, color = type)) + geom_point(size = .7) + 
+  geom_smooth(se = F, size = .7, method = 'lm') + 
   scale_color_discrete(name = 'Error\nType', breaks = c('Fit', 'Val'), labels = c('Fit', 'Validation')) +
   scale_x_continuous(breaks = pretty_breaks(n = 12)) +
   labs(y = expression(paste('Coefficient of Determination (R'^2,')'))) +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) 
   theme_bw()
 
-ggsave('figures/R2.png', width = 4, height = 3, units = 'in')
+ggsave('figures/R2linear.png', width = 4, height = 3, units = 'in')
 
+## Error trends
+lmFit <- lm(Error ~ Year, r %>% filter(type == 'Fit'))
+lmVal <- lm(Error ~ Year, r %>% filter(type == 'Val'))
+summary(lmFit)
+summary(lmVal)
+confint(lmFit, 'Year', level=0.95)
+confint(lmVal, 'Year', level=0.95)
 ##Metric Counts
 #see the various reported metrics
 unique(error.long$Metric)[order(unique(error.long$Metric))]
-
-
 
 ### Go through error metrics and combine to get total counts for different metrics.
 

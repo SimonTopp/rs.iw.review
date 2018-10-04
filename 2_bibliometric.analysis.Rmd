@@ -26,6 +26,7 @@ library(bibliometrix)
 library(prettydoc)
 library(rio)
 library(tidyverse)
+library(feather)
 ```
 
 
@@ -47,6 +48,7 @@ M$SO <- M$SO %>% gsub(pattern = '^J GEOPHYS RES$', replacement = "JOURNAL OF GEO
   gsub(pattern = '^PHOTOGRAMMETR\\. ENG\\. REMOTE SENS\\.$|^PHOTOGRAMMETR\\. ENGNG REMOTE SENS\\.$|^PHOTOGRAMMETRIC ENGINEERING & REMOTE SENSING$', replacement = "PHOTOGRAMMETRIC ENGINEERING AND REMOTE SENSING", x = .) %>%
   gsub(pattern = '^SCIENCE OF THE TOTAL ENVIRONMENT, THE$', replacement = "SCIENCE OF THE TOTAL ENVIRONMENT", x = .)
 
+write_feather(M, 'out/ScopusMerge.feather')
 ```
 
 # Descriptive Analysis
@@ -185,7 +187,7 @@ t1 <- x %>% filter(Year > 2002 & Year < 2008)
 t2 <- x %>% filter(Year > 2008 & Year < 2014)
 
 t.test(t1$count, t2$count)
-t.test(t1$resid, t2$resid)
+t.test(t2$resid, t1$resid)
 
 ```
 

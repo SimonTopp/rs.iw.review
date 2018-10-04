@@ -9,3 +9,5 @@
 *.feather
 .DS_Store
 *.txt
+*.xml
+*.jpg

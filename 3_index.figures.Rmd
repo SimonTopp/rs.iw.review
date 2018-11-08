@@ -90,10 +90,10 @@ viz <- function(data, x, fill, stack, label){
                 theme(axis.text.x = element_text(angle = 90, 
                                                  hjust = 1,
                                                  vjust = 0.5),
-                legend.text=element_text(size=7),
+                legend.text=element_text(size=9),
                 axis.title = element_blank(),
                 legend.position = 'top',
-                legend.title=element_text(size=9),
+                legend.title=element_text(size=10),
                 legend.key.size = unit(0.5,'cm')) +
                 guides(fill = guide_legend(nrow = 2, title.position = 'top'))
         } 
@@ -108,10 +108,10 @@ viz <- function(data, x, fill, stack, label){
         theme(axis.text.x = element_text(angle = 90, 
                                          hjust = 1, 
                                          vjust = 0.5),
-              legend.text=element_text(size=7),
+              legend.text=element_text(size=9),
               axis.title = element_blank(),
               legend.position = 'top',
-              legend.title=element_text(size=9),
+              legend.title=element_text(size=10),
               legend.key.size = unit(0.5,'cm')) +
         guides(fill = guide_legend(nrow = 2, title.position = 'top'))
         }
@@ -125,10 +125,10 @@ viz <- function(data, x, fill, stack, label){
                 theme(axis.text.x = element_text(angle = 90,
                                                  hjust = 1,
                                                  vjust = 0.5),
-                legend.text=element_text(size=7),
+                legend.text=element_text(size=9),
                 axis.title = element_blank(),
                 legend.position = 'top',
-                legend.title=element_text(size=9),
+                legend.title=element_text(size=10),
                 legend.key.size = unit(0.5,'cm')) +
                 guides(fill = guide_legend(nrow = 2, title.position = 'top'))
         } 
@@ -165,32 +165,45 @@ g <- grid.arrange(
 ggplot2::ggsave(filename='figures/YearDist.png',plot = g, width=6.5,height=6, units='in', dpi=250)
 
 
-#############Stacked Bars VersionFigure
+#############Stacked Bars Version Figure
 ## Parameter Groups
+p1 <- viz(munge, as.factor(munge$Year.Mixed), munge$Cat, 'stack', 'Publication Focus') +
+  scale_fill_brewer(palette = 'Paired') 
+
 p1 <- viz(munge, as.factor(munge$Year.Mixed), munge$Parameter.Grp, 'stack', 'Modelled Parameters') +
   scale_fill_brewer(breaks = levels(munge$Parameter.Grp), labels = c("Algae", "Carbon", "Clarity", "Suspended\nSediment", "Turbidity", "Nutrients", "Other"),
                      palette = 'Paired') 
 
 ## Modelling Approach
+filt <- filt %>% filter(Year > 1984)
 p2 <- viz(filt, filt$Year.Mixed, filt$Model, 'stack', 'Modelling Approach')  +
   scale_fill_brewer(breaks = levels(munge$Model),
                      palette = 'Paired')
 
+## Experiment with continueous Gradient
+cc <- scales::seq_gradient_pal("light blue", "red", "Lab")(seq(0,1,length.out=5))
 ## Study Coverage
 cov <- filt %>% filter(Coverage.KM != 'unknown')
-p3 <- viz(cov, as.factor(cov$Year.Mixed), cov$Coverage.KM, 'stack', expression(paste('Coverage Scale (km'^'2',')')))
+levels(cov$Coverage.KM) = c("unknown", "< 10^3","< 10^3", "10^3 < 10^4", "10^3 < 10^5", "10^5 < 10^6", "> 10^6")
+p3 <- viz(cov, as.factor(cov$Year.Mixed), cov$Coverage.KM, 'stack', expression(paste('Coverage Scale (km'^'2',')'))) + scale_fill_manual(values = cc)
 
+## Experiment with continueous Gradient
+cc2 <- scales::seq_gradient_pal("light blue", "red", "Lab")(seq(0,1,length.out=6))
 ## Study Duration
-p4 <- viz(filt, as.factor(filt$Year.Mixed), filt$Time.Bin, 'stack', 'Study Duration')
+p4 <- viz(filt, as.factor(filt$Year.Mixed), filt$Time.Bin, 'stack', 'Study Duration') + scale_fill_manual(values = cc2)
 
 g <- grid.arrange(
-  grobs = list(p1,p2,p3,p4),
-  layout_matrix = rbind(c(1, 2),
-                        c(3, 4)),
+  grobs = list(p2,p3,p4),
+  nrow = 1,
+  #layout_matrix = rbind(c(2, NA),
+  #                      c(3, 4)),
   left = 'Distribution',
   bottom = 'Year'
 )
-ggsave(filename='figures/YearDistStackYearMixed.png',plot = g, width=6.5,height=6, units='in', dpi=250)
+
+ggsave(filename='figures/YearDistStackYearMixedv3.png',plot = g, width=12,height=3, units='in', dpi=250)
+
+viz(filt, as.factor(filt$Year.Mixed), filt$Cat, 'stack', 'Analysis Level')
 
 #############Bar Version
 ## Parameter Group
@@ -224,7 +237,8 @@ ggplot(filt, aes(x = Year, fill = Cat)) +
         geom_density(position = 'fill', alpha = 0.6, adjust = 1/2) + 
         scale_y_continuous(labels = percent) +
         scale_x_continuous(breaks = pretty_breaks(n=10)) +
-        scale_fill_brewer(palette = 'Paired') +
+        #scale_fill_brewer(palette = 'Paired') +
+        scale_fill_viridis_d() +
         theme_bw() + 
         labs(x = 'Year', y = 'Distribution', fill = 'Analysis Level') + 
         theme(axis.text.x = element_text(angle = 90, 
@@ -232,12 +246,12 @@ ggplot(filt, aes(x = Year, fill = Cat)) +
                                          vjust = 0.5),
               legend.text=element_text(size=7),
               axis.text = element_text(size = 7),
-              legend.position = 'top',
+              legend.position = 'right',
               legend.title=element_text(size=9),
-              legend.key.size = unit(0.5,'cm')) +
+              legend.key.size = unit(0.5,'cm')) #+
         guides(fill = guide_legend(nrow = 2, title.position = 'top'))
 
-ggsave(filename='figures/CausalFig.png', width=3,height=3, units='in', dpi=250)
+ggsave(filename='figures/CausalFigViridis.png', width=4,height=2, units='in', dpi=250)
 
 ### Yearly Publications and Parameter Publications by Waterbody (Figure 3)
 
@@ -328,24 +342,26 @@ color <- 'gray60'
 st_bbox(world)
 
 ## Category Spatial (not used)
-p1 <- ggplot() + geom_sf(data = world, aes(), fill = fill, color = color) + 
-  geom_sf(data = filt.sf, aes(colour = Cat), size = 0.7,alpha =0.8) + 
+ggplot() + geom_sf(data = world, aes(), fill = fill, color = color) + 
+  geom_sf(data = filt.sf, aes(colour = Cat), size = .2,alpha =0.8) + 
   coord_sf(ylim = c(-6000000, 8338578), xlim = c(-16500000, 16874713)) +
   theme_bw() +
-  scale_colour_viridis_d(name = 'Paper \n Category') +
+  scale_colour_viridis_d(name = 'Analysis \n Level') +
   theme(axis.text.x = element_blank(),
         axis.text.y = element_blank(),
         axis.ticks = element_blank(),
         rect = element_blank(),
-        legend.position = c(0.2,0.22),
-        legend.background = element_rect(fill = 'white', colour = 'gray50'))
+        panel.grid.major = element_line(color = 'white'),
+        legend.position = 'none')
+
+ggsave(filename='figures/CatSpatial.png', width=3,height=1.5, units='in', dpi=350)
 
 # Publication Year Spatial
 p1<- ggplot() + geom_sf(data = world, aes(), fill = fill, color = color) + 
   geom_sf(data = filt.sf, aes(colour = Year),size = 0.7, alpha =0.9) + 
   coord_sf(ylim = c(-6000000, 8338578), xlim = c(-16500000, 16874713)) +
   theme_bw() +
-  scale_colour_viridis_c(name = 'Publication Year') +
+  scale_colour_viridis_c(name = 'Publication\nYear') +
   theme(axis.text.x = element_blank(),
         axis.text.y = element_blank(),
         axis.ticks = element_blank(),
@@ -355,7 +371,7 @@ p1<- ggplot() + geom_sf(data = world, aes(), fill = fill, color = color) +
         legend.margin = margin(0,0,0,0, "mm"),
         legend.text=element_text(size=7),
               axis.title = element_blank(),
-              legend.position = 'bottom',
+              legend.position = 'right',
               legend.title=element_text(size=9),
               legend.key.size = unit(0.5,'cm'))
 
@@ -374,7 +390,7 @@ p2<- ggplot() + geom_sf(data = world, aes(), fill = fill, color = color) +
         legend.margin = margin(0,0,0,0, "mm"),
         legend.text=element_text(size=7),
               axis.title = element_blank(),
-              legend.position = 'bottom',
+              legend.position = 'right',
               legend.title=element_text(size=9),
               legend.key.size = unit(0.5,'cm'))
 
@@ -384,7 +400,7 @@ p3 <-ggplot() + geom_sf(data = world, aes(), fill = fill, color = color) +
   geom_sf(data = filt.sf %>% filter(Coverage.KM != 'unknown'), aes(colour = Coverage.KM),size = .7, alpha =0.9) +
   coord_sf(ylim = c(-6000000, 8338578), xlim = c(-16500000, 16874713)) +
   theme_bw() +
-  scale_colour_viridis_d(name = expression(paste('Coverage Scale (km'^'2',')'))) +
+  scale_colour_viridis_d(name = expression(paste('Coverage\nScale (km'^'2',')'))) +
   theme(axis.text.x = element_blank(),
         axis.text.y = element_blank(),
         axis.ticks = element_blank(),
@@ -394,13 +410,13 @@ p3 <-ggplot() + geom_sf(data = world, aes(), fill = fill, color = color) +
         legend.margin = margin(0,0,0,0, "mm"),
         legend.text=element_text(size=7),
               axis.title = element_blank(),
-              legend.position = 'bottom',
+              legend.position = 'right',
               legend.title=element_text(size=9),
               legend.key.size = unit(0.5,'cm'))
 
 g <- grid.arrange(p1,p2,p3, nrow = 3)
 
-ggsave(filename='figures/Spatial.png', plot = g, width=4,height=7, units='in', dpi=350)
+ggsave(filename='figures/SpatialLgndRight.png', plot = g, width=4,height=7, units='in', dpi=350)
 ```
 
 # Figure category distribution plot
@@ -483,7 +499,7 @@ papes.sum <- filt %>%
 # Pull and organize fit errors
 ef <- munge %>%
   mutate(model.id = row_number()) %>%
-  select(ID, model.id,Year,Year.Bin, Parameter, Parameter.Grp, Error.fit1:Error.fit4) %>%
+  select(ID, model.id,Year,Year.Bin, Parameter, Parameter.Grp, Model, Error.fit1:Error.fit4) %>%
   gather(Error.fit1:Error.fit4, key = metric.num, value = Error) %>%
   mutate(type = 'Fit')
 
@@ -550,15 +566,18 @@ r <- error.long %>% filter(Metric == 'R2')%>%
   filter(Error < 1) #Removes 1 data entry error, remove later
 
 # Error Time Series (Figure 4)
-ggplot(r,aes(x = Year, y = Error, color = type)) + geom_point(size = .7) + 
+ggplot(r,aes(x = Year, y = Error, color = Model)) + geom_point(size = .7) + 
   geom_smooth(se = F, size = .7, method = 'lm') + 
-  scale_color_discrete(name = 'Error\nType', breaks = c('Fit', 'Val'), labels = c('Fit', 'Validation')) +
+  #scale_color_discrete(name = 'Error\nType', breaks = c('Fit', 'Val'), labels = c('Fit', 'Validation')) +
   scale_x_continuous(breaks = pretty_breaks(n = 12)) +
-  labs(y = expression(paste('Coefficient of Determination (R'^2,')'))) +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1)) 
-  theme_bw()
+  labs(y = expression(paste('Coefficient of\nDetermination (R'^2,')'))) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, 
+                                   hjust = 1),
+        legend.position = 'bottom')#,
+        plot.margin = margin(.7,.7,.7,.7, unit = 'cm'))
 
-ggsave('figures/R2linear.png', width = 4, height = 3, units = 'in')
+ggsave('figures/R2linearv2.png', width = 4, height = 3, units = 'in')
 
 ## Error trends
 lmFit <- lm(Error ~ Year, r %>% filter(type == 'Fit'))

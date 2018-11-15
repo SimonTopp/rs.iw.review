@@ -666,4 +666,36 @@ viz(filt, filt$Year, filt$Cat, 'fill', 'Study Category')
 viz(filt, filt$Year, filt)
 
 ggplot(filt, aes(x = Cat, y = as.numeric(Coverage.KM), colour = Parameter.Grp)) + geom_boxplot()
+
 ```
+
+
+```{r}
+x <- filt %>%
+  group_by(Year) %>%
+  summarise(count = n())
+##Fit a trend line to the data
+# Linear
+lm <- lm(x$count~x$Year)
+# Log
+lm2 <- lm(log(x$count)~x$Year)
+summary(lm2)
+## Calculate doubling time
+log(2)/lm2$coefficients[2]
+
+ggplot(x) + geom_point(aes(x = Year, y = exp(lm2$fitted.values))) + geom_point(aes(x = Year, y = count), colour = 'red')
+
+# Average Annual Increase
+(x$count[x$Year == max(x$Year)]/x$count[x$Year == min(x$Year)])^(1/(max(x$Year) - min(x$Year))) - 1
+
+
+#Check 1980-2012 to compare to Bornman and Mutz 2015
+check <- x %>% filter(Year >1979, Year <2013)
+(x$count[x$Year == 2012]/x$count[x$Year == 1980])^(1/33) - 1
+lmcheck<- lm(log(check$count)~check$Year)
+#Doubling time
+log(2)/lmcheck$coefficients[2]
+
+
+```
+

@@ -232,13 +232,15 @@ g <- grid.arrange(
 )
 ggsave(filename='figures/YearDistBar.png',plot = g, width=6.5,height=6, units='in', dpi=250)
 
+
+levels(filt$Cat)[levels(filt$Cat) == 'Applied'] = 'Water Quality Science'
 ## Causal fig (Figure 7)
-ggplot(filt, aes(x = Year, fill = Cat)) + 
+p1 <- ggplot(filt, aes(x = Year, fill = Cat)) + 
         geom_density(position = 'fill', alpha = 0.6, adjust = 1/2) + 
         scale_y_continuous(labels = percent) +
         scale_x_continuous(breaks = pretty_breaks(n=10)) +
-        #scale_fill_brewer(palette = 'Paired') +
-        scale_fill_viridis_d() +
+        scale_fill_brewer(palette = 'Paired') +
+        #scale_fill_viridis_d() +
         theme_bw() + 
         labs(x = 'Year', y = 'Distribution', fill = 'Analysis Level') + 
         theme(axis.text.x = element_text(angle = 90, 
@@ -246,12 +248,40 @@ ggplot(filt, aes(x = Year, fill = Cat)) +
                                          vjust = 0.5),
               legend.text=element_text(size=7),
               axis.text = element_text(size = 7),
-              legend.position = 'right',
+              legend.position = 'top',
               legend.title=element_text(size=9),
-              legend.key.size = unit(0.5,'cm')) #+
+              legend.key.size = unit(0.5,'cm')) +
         guides(fill = guide_legend(nrow = 2, title.position = 'top'))
 
 ggsave(filename='figures/CausalFigViridis.png', width=4,height=2, units='in', dpi=250)
+
+check <- filt %>%
+  mutate(check = 1) %>%
+  group_by(Cat) %>%
+  arrange(Year) %>%
+  mutate(cumsum = cumsum(check)) %>%
+  ungroup()
+
+p2<-ggplot(check, aes(x = Year, y = cumsum,color = Cat)) + 
+        geom_line() + 
+        scale_x_continuous(breaks = pretty_breaks(n=10)) +
+        scale_color_brewer(palette = 'Paired') +
+        #scale_color_viridis_d() +
+        theme_bw() + 
+        labs(x = 'Year', y = 'Cumulative Sum', color = 'Analysis Level') + 
+        theme(axis.text.x = element_text(angle = 90, 
+                                         hjust = 1, 
+                                         vjust = 0.5),
+              legend.position = 'none',
+              axis.text = element_text(size = 7))
+              #legend.position = 'right',
+              #legend.title=element_text(size=9),
+              #legend.key.size = unit(0.5,'cm')) #+
+        #guides(fill = guide_legend(nrow = 2, title.position = 'top'))
+
+g <- grid.arrange(p1,p2, ncol = 1, heights = c(2,1.5))
+ggsave(filename='figures/CausalFig2Panel.png',plot = g, width=3.5,height=5, units='in', dpi=250)
+
 
 ### Yearly Publications and Parameter Publications by Waterbody (Figure 3)
 
@@ -321,12 +351,23 @@ library(sf)
 library(rgdal)
 library(magrittr)
 library(viridis)
-
+library(rnaturalearth)
 # Convert filtered index into spatial object and remove studies without explicit lat/long
 filt.sf <- filt %>% 
   filter(!is.na(Lat)) %>% 
   st_as_sf(.,coords=c('Long','Lat'),crs=4326) %>%
   st_transform(.,54030)
+
+#Check world v2
+world <- rnaturalearth::ne_download(scale = 110,
+                                       type = "land",
+                                       category = "physical",
+                                       destdir = tempdir(),
+                                       load = TRUE,
+                                       returnclass = "sf") %>%
+    st_transform(.,54030) %>%
+    st_buffer(.,0)
+  
 
 # Pull in world map and reproject
 data("wrld_simpl")
@@ -336,13 +377,13 @@ world = st_as_sf(wrld_simpl) %>%
 
 # Set figure options
 fill <- 'gray60'
-color <- 'gray60'
+color <- NA
 
 # Check bounding box
 st_bbox(world)
 
 ## Category Spatial (not used)
-ggplot() + geom_sf(data = world, aes(), fill = fill, color = color) + 
+ggplot() + geom_sf(data = world, aes(), size = 0.2, fill = fill, color = color) + 
   geom_sf(data = filt.sf, aes(colour = Cat), size = .2,alpha =0.8) + 
   coord_sf(ylim = c(-6000000, 8338578), xlim = c(-16500000, 16874713)) +
   theme_bw() +
@@ -357,9 +398,9 @@ ggplot() + geom_sf(data = world, aes(), fill = fill, color = color) +
 ggsave(filename='figures/CatSpatial.png', width=3,height=1.5, units='in', dpi=350)
 
 # Publication Year Spatial
-p1<- ggplot() + geom_sf(data = world, aes(), fill = fill, color = color) + 
+p1 <- ggplot() + geom_sf(data = world, aes(), fill= fill, color = color) + 
   geom_sf(data = filt.sf, aes(colour = Year),size = 0.7, alpha =0.9) + 
-  coord_sf(ylim = c(-6000000, 8338578), xlim = c(-16500000, 16874713)) +
+  coord_sf(ylim = c(-5500000, 8338578), xlim = c(-13000000, 16874713)) +
   theme_bw() +
   scale_colour_viridis_c(name = 'Publication\nYear') +
   theme(axis.text.x = element_blank(),
@@ -371,14 +412,14 @@ p1<- ggplot() + geom_sf(data = world, aes(), fill = fill, color = color) +
         legend.margin = margin(0,0,0,0, "mm"),
         legend.text=element_text(size=7),
               axis.title = element_blank(),
-              legend.position = 'right',
+              legend.position = 'bottom',
               legend.title=element_text(size=9),
               legend.key.size = unit(0.5,'cm'))
 
 #Study Duration
 p2<- ggplot() + geom_sf(data = world, aes(), fill = fill, color = color) + 
   geom_sf(data = filt.sf, aes(colour = Time.Bin),size = 0.7, alpha =0.9) + 
-  coord_sf(ylim = c(-6000000, 8338578), xlim = c(-16500000, 16874713)) +
+  coord_sf(ylim = c(-5500000, 8338578), xlim = c(-13000000, 16874713)) +
   theme_bw() +
   scale_colour_viridis_d(name = 'Time Span') +
   theme(axis.text.x = element_blank(),
@@ -390,7 +431,7 @@ p2<- ggplot() + geom_sf(data = world, aes(), fill = fill, color = color) +
         legend.margin = margin(0,0,0,0, "mm"),
         legend.text=element_text(size=7),
               axis.title = element_blank(),
-              legend.position = 'right',
+              legend.position = 'bottom',
               legend.title=element_text(size=9),
               legend.key.size = unit(0.5,'cm'))
 
@@ -398,7 +439,7 @@ p2<- ggplot() + geom_sf(data = world, aes(), fill = fill, color = color) +
 #Study Coverage
 p3 <-ggplot() + geom_sf(data = world, aes(), fill = fill, color = color) + 
   geom_sf(data = filt.sf %>% filter(Coverage.KM != 'unknown'), aes(colour = Coverage.KM),size = .7, alpha =0.9) +
-  coord_sf(ylim = c(-6000000, 8338578), xlim = c(-16500000, 16874713)) +
+  coord_sf(ylim = c(-5500000, 8338578), xlim = c(-13000000, 16874713)) +
   theme_bw() +
   scale_colour_viridis_d(name = expression(paste('Coverage\nScale (km'^'2',')'))) +
   theme(axis.text.x = element_blank(),
@@ -410,13 +451,13 @@ p3 <-ggplot() + geom_sf(data = world, aes(), fill = fill, color = color) +
         legend.margin = margin(0,0,0,0, "mm"),
         legend.text=element_text(size=7),
               axis.title = element_blank(),
-              legend.position = 'right',
+              legend.position = 'bottom',
               legend.title=element_text(size=9),
               legend.key.size = unit(0.5,'cm'))
 
 g <- grid.arrange(p1,p2,p3, nrow = 3)
 
-ggsave(filename='figures/SpatialLgndRight.png', plot = g, width=4,height=7, units='in', dpi=350)
+ggsave(filename='figures/SpatialSimpleWorld.png', plot = g, width=3.5,height=6, units='in', dpi=350)
 ```
 
 # Figure category distribution plot
@@ -560,21 +601,22 @@ error.long$Error[error.long$Error == ''] = 'none'
 unique(error.long$Metric)[order(unique(error.long$Metric))]
 
 ### Pull the R2 Values to make error time series figure
-r <- error.long %>% filter(Metric == 'R2')%>%
+r <- error.long %>% 
+  filter(Metric == 'R2')%>%
   mutate(Error = as.numeric(Error)) %>%
-  na.omit() %>%
+  #na.omit() %>%
   filter(Error < 1) #Removes 1 data entry error, remove later
 
 # Error Time Series (Figure 4)
-ggplot(r,aes(x = Year, y = Error, color = Model)) + geom_point(size = .7) + 
+ggplot(r,aes(x = Year, y = Error, color = type)) + geom_point(size = .7) + 
   geom_smooth(se = F, size = .7, method = 'lm') + 
-  #scale_color_discrete(name = 'Error\nType', breaks = c('Fit', 'Val'), labels = c('Fit', 'Validation')) +
+  scale_color_discrete(name = 'Error\nType', breaks = c('Fit', 'Val'), labels = c('Fit', 'Validation')) +
   scale_x_continuous(breaks = pretty_breaks(n = 12)) +
   labs(y = expression(paste('Coefficient of\nDetermination (R'^2,')'))) +
   theme_bw() +
   theme(axis.text.x = element_text(angle = 90, 
                                    hjust = 1),
-        legend.position = 'bottom')#,
+        #legend.position = 'bottom',
         plot.margin = margin(.7,.7,.7,.7, unit = 'cm'))
 
 ggsave('figures/R2linearv2.png', width = 4, height = 3, units = 'in')

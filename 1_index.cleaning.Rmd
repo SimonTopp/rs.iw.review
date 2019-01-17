@@ -27,11 +27,11 @@ library(feather)
 ## Munging
 
 # Download latest version
-drive_download(as_id('https://docs.google.com/spreadsheets/d/1fHsqm74c2sp2LyZjredmHMLvS08nlfHZTxf49eNon4Y/edit?usp=sharing'), path = 'in/wqIndex20180921.csv', overwrite = T)
+drive_download(as_id('https://docs.google.com/spreadsheets/d/1fHsqm74c2sp2LyZjredmHMLvS08nlfHZTxf49eNon4Y/edit?usp=sharing'), path = 'in/wqIndex20190104.csv', overwrite = T)
 
 
 # Rename all the columns
-index <- read.csv('in/wqIndex20180921.csv', na.string = c('','na')) %>% 
+index <- read.csv('in/wqIndex20190104.csv', na.string = c('','na')) %>% 
   select(ID = Paper.ID, Author, Journal, Year, DOI, Location, Lat, Long, Coverage.KM = Study.Scale..sq.km., Years = Timescale..in.years., Waterbody, Sensor = Sensor.s., Sensor.Type,  Atm.Comp = Atm..Comparison, Best.AC = Best.A..Correction, Parameter = Constituent, Landscape.var = Landscape.Variables.in.final.model, Num.Models = Number.of.models.used, Model.Comparison = Modelling.Approach.Comparison, Model = Chosen.Model.Approach, EF = Error..fit., EF.metric = Error.metric..fit., EV = Error..validation., EV.metric = Error.Metric..validation., Figs.m = Methodology.Figs.Tables, Figs.v = Validation.Figs.Tables, Figs.t = Applied.Figures, Cat = Category, Rating = Category.Rating..1.10.)
   
 # Add a couple new parameters
@@ -347,6 +347,9 @@ write_feather(index.munge, 'out/IndexMungedFull.feather')
 # Outfacing for publication
 out <- index.munge %>%
   select(ID, Author, Journal, Title, Year, DOI, Location:Sensor.Type, Atm.Correction = Best.AC, Parameter, Parameter.Grp, Num.Models:Cat, Error.fit1:Val.metric3, Cite.Count )
+
+check <- out %>%
+  filter(Cat == 'Applied')
 
 write.csv(out, 'out/IndexMunged20180921.csv')
 ```

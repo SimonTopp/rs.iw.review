@@ -691,6 +691,7 @@ kable(error.metrics) %>%
 
 # Some extraneous single panel figures 
 
+
 ```{r}
 ##### Extraneous single panel Figures
 

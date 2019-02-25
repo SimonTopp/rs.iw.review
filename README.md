@@ -1,2 +1,2 @@
 # rs.iw.review
-Inland water review paper script
+This repository contains the code for the analyses done in Topp et al. (in review) Inland water quality review paper.
